@@ -1,0 +1,38 @@
+[PASS] C1 F_att = -grad V_att needs the symmetrized kernel (A_ij + A_ji)
+       predicate: max|F_att + grad V| < 1e-7 for (A+A^T)/2, and > 1e-3 for A alone
+       measured:  symmetrized 6.28e-10, A alone 3.04e-02
+[PASS] C2 Algorithm 1 F_FK = -grad V_FK
+       predicate: max|F_FK + grad V_FK| < 1e-7, and > 1e-3 with the lattice sign flipped
+       measured:  as written 2.02e-09, sign flipped 3.53e+00
+[PASS] C3 gyroscopic force does no work and has zero divergence in P
+       predicate: |sum_k v_k^T J v_k| < 1e-12 and |Tr(J M^-1)| < 1e-12
+       measured:  power -3.2e-16, trace 0.0e+00
+[PASS] C4a the PDF's test (10^3 steps, vary dt) cannot see the explicit gyro kick
+       predicate: observed order >= 1.8 for all three integrators at a fixed step count
+       measured:  pdf: errs 2.45e+01, 2.03e+00, 3.96e-01, orders 3.60, 2.36; rot: errs 1.30e-02, 2.28e-03, 5.58e-04, orders 2.50, 2.03; mag: errs 1.06e-02, 2.16e-03, 5.36e-04, orders 2.30, 2.01
+[PASS] C4b at a fixed horizon the PDF integrator loses second order (expected defect)
+       predicate: horizon 20.0: pdf error >= 100x rot error at every dt, pdf order < 1.5 on the finest pair, rot and mag orders >= 1.8
+       measured:  pdf: errs 5.62e+00, 2.03e+00, 1.28e+00, orders 1.47, 0.66; rot: errs 9.25e-03, 2.28e-03, 5.69e-04, orders 2.02, 2.00; mag: errs 8.57e-03, 2.16e-03, 5.41e-04, orders 1.99, 2.00
+[PASS] C4d the explicit gyro half-kick expands momenta; the Cayley rotation does not (expected defect)
+       predicate: ||I + (h/2)K||_2 = sqrt(1 + (h*lambda_max/2)^2) > 1 and ||cayley(K, h/2)||_2 = 1, K = M^-1/2 J M^-1/2
+       measured:  lambda_max 1.840, h 0.04: explicit 1.000677, Cayley 1.000000000000000; with F = 0 the kinetic energy of the top mode grows by explicit^4 per step, x6.3e+58 over the C4c horizon
+[PASS] C4c long run: pdf diverges, rot and mag stay bounded (expected defect)
+       predicate: dt 0.04, horizon 2000.0: pdf max error grows > 5x from the first tenth to the whole run; rot and mag grow < 3x
+       measured:  pdf: first tenth 1.49e+05, whole 1.25e+58; rot: first tenth 1.16e-02, whole 1.25e-02; mag: first tenth 5.44e-03, whole 1.27e-02
+[PASS] C5 the Gibbs test passes only with J = 0 for the PDF integrator (expected defect)
+       predicate: max relative variance bias < 2% for pdf with J=0 and rot with J!=0; > 2% for pdf with J!=0
+       measured:  pdf, J=0: -0.000, -0.001, -0.001, -0.001; pdf, J!=0: +0.113, +0.083, +0.038, +0.166; rot, J!=0: +0.000, -0.000, +0.000, -0.000
+[PASS] C6 Q_top is an integer up to float32 rounding; n_ik in {-1, 0, 1}
+       predicate: max|Q - round Q| < 16 * 2^-23 on 20000 random float32 configurations (N=16, d=4)
+       measured:  max deviation 9.54e-07, n values [-1.0, 0.0, 1.0]
+[PASS] C6b at |bond| = pi the value of Q is fixed by the half-open convention, not by geometry
+       predicate: two antipodal nodes give Q = -1 under wrap into [-pi, pi) (mirror image would give +1)
+       measured:  Q = -1
+[PASS] C7 figure 2's Q = +1 ring (N = 4) has bond curvature cos(pi/2) = 0
+       predicate: Q = 1 and every bond Hessian g_lat*cos(bond) is 0, i.e. |Q| = N/4, not < N/4
+       measured:  Q = +1, max |cos(bond)| = 6.1e-17
+[PASS] C8 section 2: div F_diff != 0 comes from the conservative F_att; F_rot is non-potential by its curl
+       predicate: div F_rot(0) = 0, div F_att(0) = -kappa, Jacobian of F_rot asymmetric at theta = (0, 0.7)
+       measured:  div F_rot +0.0e+00, div F_att -1.000, dF1/dth2 - dF2/dth1 = -1.288
+
+12/12 checks PASS
