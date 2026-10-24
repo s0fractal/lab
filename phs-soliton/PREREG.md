@@ -492,9 +492,10 @@ Verdict, first match wins:
 ## Review
 
 - Round 1: Codex (codex-cli 0.164.0, read-only sandbox), blind prompt (what and where, no conclusions), on commit cbc355f. AMEND: 4 P1 + 3 P2. Text: reviews/prereg-v1-codex-r1.md; prompt reviews/prereg-v1-codex-prompt.txt.
-- Round 2, scoped to the seven findings, on commit 8d70cfd. AMEND: 4 closed (room, stale gate, duplicates, lambda floor); open P1 tag correspondence (claims agreed without resolving the tag), P2 check-then-import window in workers, P2 infinite validation loss still eligible; new P2 crash on a cell without finite sequences. Text: reviews/prereg-v1-codex-r2.md.
-- All round-2 items fixed with tests and mutants (D20, D21). Round 3 below.
-- Round 1 found no test-cell leakage in the 92 calibration jobs and 18 probes (all seed 100, calib digests).
+- Round 2, scoped to the seven findings, on commit 8d70cfd. AMEND: 4 closed (room, stale gate, duplicates, lambda floor); open P1 tag correspondence, P2 check-then-import window in workers, P2 infinite validation loss still eligible; new P2 crash on a cell without finite sequences. Text: reviews/prereg-v1-codex-r2.md.
+- Round 3, scoped to the four open items, on commit c97f738. ACCEPT: all four closed, no new defect. Text: reviews/prereg-v1-codex-r3.md.
+- Every fix carries a test and a named mutant (D11, D19-D21). Round 1 found no test-cell leakage in the 92 calibration jobs and 18 probes (all seed 100, calib digests).
+- End-to-end smoke runs on a throwaway clone with a tiny PREREG (tag, gate, 80 runs, analyze, render, refusals) found six further defects before the tag (numpy bools in results.json, foreign manifests skipped, sigma grid from code, a figure assuming 8 sigma values, a missing admission argument, an empty log-scale plot); all fixed.
 
 ## Frozen files
 
