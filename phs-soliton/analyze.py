@@ -176,8 +176,10 @@ def compute(prereg: dict, prereg_sha: str, manifest_list: list, gate: dict | Non
     if room["available"]:
         room.update(pure_sigma_crit_mean=float(np.mean(pure_sc)), pure_lambda=float(np.mean(pure_lam)),
                     sigma_max=rule["room"]["pure_sigma_crit_max"], lambda_max=rule["room"]["pure_lambda_max"])
-        room["holds"] = bool(room["pure_sigma_crit_mean"] <= rule["room"]["pure_sigma_crit_max"] + EPS
-                             and room["pure_lambda"] <= rule["room"]["pure_lambda_max"] + EPS)
+        # REFUTED needs one testable conjunct: room on sigma_crit or room on lambda
+        room["sigma"] = bool(room["pure_sigma_crit_mean"] <= rule["room"]["pure_sigma_crit_max"] + EPS)
+        room["lambda"] = bool(room["pure_lambda"] <= rule["room"]["pure_lambda_max"] + EPS)
+        room["holds"] = room["sigma"] or room["lambda"]
     else:
         room["holds"] = False
 

@@ -124,6 +124,14 @@ class TestVerdicts(unittest.TestCase):
         flat = {k: (lambda T, s, seed: 0.99) for k in KINDS}
         self.assertEqual(verdict(manifests(flat)), "INCONCLUSIVE")
 
+    def test_room_on_one_metric_is_enough_to_refute(self):
+        def steady(T, s, seed):   # Pure: no decay with T at any sigma (no room on lambda), breaks above 0.10
+            return 0.99 - 0.001 * seed if s <= 0.10 + 1e-9 else 0.5
+        out = analyze.compute(PREREG, "x", manifests(dict(BASE, pure=steady, soliton=steady)), GATE)
+        self.assertFalse(out["room"]["lambda"])
+        self.assertTrue(out["room"]["sigma"])
+        self.assertEqual(out["verdict"], "REFUTED")
+
     def test_missing_verdict_run_is_inconclusive(self):
         ms = manifests(dict(BASE, gru=robust), drop={("gru", "A", 64, 3)})
         self.assertEqual(verdict(ms), "INCONCLUSIVE")

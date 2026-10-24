@@ -149,6 +149,26 @@ def cmd_summary() -> int:
         out += ["", f"Selected so far: {best[0]} (objective {best[1]:.4f}, mean val loss {best[2]:.4f})."
                 if best else "No complete trial.", ""]
         out += ["Rationales:", ""] + [f"- {t}: {(v.get('A') or v.get('B'))['rationale']}" for t, v in trials] + [""]
+    probes = CAL / "probes.jsonl"
+    if probes.exists():
+        out += ["## Probes (no budget spent, nothing selected)", "",
+                "A probe retrains a tried configuration with its seed and evaluates more sigma values or another T "
+                "(`tools/probe.py`). sigma_crit here is read on the probe's own sigma list (calib cells).", "",
+                "| probe | of | task | T | steps | status | Acc sigma 0 | sigma_crit | Acc by sigma | wall s | peak RSS MB |",
+                "|---|---|---|---|---|---|---|---|---|---|---|"]
+        for r in map(json.loads, probes.read_text().splitlines()):
+            cells = r.get("cells", {})
+            crit = -0.05
+            for key in sorted(cells, key=float):
+                if cells[key]["acc"] >= 0.8:
+                    crit = float(key)
+                else:
+                    break
+            accs = " ".join(f"{float(k):.2f}:{v['acc']:.2f}" for k, v in sorted(cells.items(), key=lambda kv: float(kv[0])))
+            out.append(f"| {r['probe']} | {r['of_trial']} | {r['task']} | {r['T']} | {r['cfg']['steps']} | {r['status']} | "
+                       f"{cells.get('0.00', {}).get('acc', float('nan')):.3f} | {crit:.2f} | {accs} | "
+                       f"{r.get('wall_seconds', 0):.0f} | {r['peak_rss_bytes'] / 2**20:.0f} |")
+        out.append("")
     (CAL / "SUMMARY.md").write_text("\n".join(out))
     print("\n".join(out))
     return 0

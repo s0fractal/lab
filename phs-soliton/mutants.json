@@ -213,6 +213,15 @@
    "kills": [
     "tests.test_analyze.TestVerdicts.test_confirmed"
    ]
+  },
+  "analyze-room-both": {
+   "claim": "Room on one metric is enough for REFUTED (the hypothesis is a conjunction).",
+   "file": "analyze.py",
+   "find": "room[\"holds\"] = room[\"sigma\"] or room[\"lambda\"]",
+   "replace": "room[\"holds\"] = room[\"sigma\"] and room[\"lambda\"]",
+   "kills": [
+    "tests.test_analyze.TestVerdicts.test_room_on_one_metric_is_enough_to_refute"
+   ]
   }
  }
 }
