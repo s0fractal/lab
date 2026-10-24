@@ -12,6 +12,7 @@ from __future__ import annotations
 import hashlib
 import itertools
 import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -99,14 +100,15 @@ def run_name(kind: str, task: str, T: int, seed: int) -> str:
     return f"{task}-{kind}-T{T:03d}-s{seed}"
 
 
-def admit(prereg: dict, prereg_sha: str, named: list, gate: dict | None) -> list:
+def admit(prereg: dict, prereg_sha: str, named: list, gate: dict | None, tag_commit: str) -> list:
     """Every reason the manifests (file name, manifest) cannot stand for runs of this PREREG; [] admits them.
-    A manifest must be one expected run, once, under its own name, from the same tag as every other manifest and the
-    gate, with the registered configuration, environment and test cells (namespace, digests, sizes)."""
+    A manifest must be one expected run, once, under its own name, from tag_commit (the commit the PREREG tag
+    resolves to, as must the gate), with the registered configuration, environment and test cells (namespace,
+    digests, sizes)."""
     g, env = prereg["grid"], prereg["environment"]
     expected = {(k, t, T, s) for k in g["models"] for t in ("A", "B") for T in g["T"] for s in g["seeds"]}
     cells = {f"{s:.2f}" for s in g["sigma"]}
-    problems, seen, tags = [], {}, set()
+    problems, seen = [], {}
     for fname, m in named:
         try:
             ident = (m["kind"], m["task"], m["T"], m["seed"])
@@ -123,7 +125,8 @@ def admit(prereg: dict, prereg_sha: str, named: list, gate: dict | None) -> list
         seen[ident] = fname
         if m.get("prereg_sha256") != prereg_sha:
             problems.append(f"{fname}: another PREREG")
-        tags.add(m.get("tag_commit"))
+        if m.get("tag_commit") != tag_commit:
+            problems.append(f"{fname}: ran at {m.get('tag_commit')!r}, not at the tag {tag_commit}")
         if m.get("status") not in ("OK", "FAILED"):
             problems.append(f"{fname}: status {m.get('status')!r}")
         if m.get("cfg") != expected_config(prereg, ident[0], ident[1]):
@@ -143,10 +146,8 @@ def admit(prereg: dict, prereg_sha: str, named: list, gate: dict | None) -> list
                     problems.append(f"{fname}: cell {key} digest differs from PREREG")
                 if c.get("n") != prereg["tasks"]["n_test"]:
                     problems.append(f"{fname}: cell {key} has n = {c.get('n')}")
-    if len(tags) > 1:
-        problems.append(f"manifests come from {len(tags)} tag commits")
-    if gate is not None and tags and gate.get("tag_commit") not in tags:
-        problems.append("the gate ran at another tag commit than the manifests")
+    if gate is not None and gate.get("tag_commit") != tag_commit:
+        problems.append(f"the gate ran at {gate.get('tag_commit')!r}, not at the tag {tag_commit}")
     return problems
 
 
@@ -293,12 +294,15 @@ def compute(prereg: dict, prereg_sha: str, manifest_list: list, gate: dict | Non
                     c = [m["cells"][f"{sig:.2f}"] for m in ms]
                     entry = {"n_seeds": len(c), "acc_mean": float(np.mean([x["acc"] for x in c])),
                              "acc_by_seed": [x["acc"] for x in c]}
-                    if "r_slip" in c[0]:
-                        entry["r_slip_mean"] = float(np.mean([x["r_slip"] for x in c]))
-                        entry["erank_mean"] = float(np.mean([x["erank"] for x in c]))
+                    if k in ("pure", "soliton"):   # absent or None where a cell had no finite sequence
+                        rs = [x["r_slip"] for x in c if x.get("r_slip") is not None]
+                        er = [x["erank"] for x in c if x.get("erank") is not None]
+                        entry["r_slip_mean"] = float(np.mean(rs)) if rs else None
+                        entry["erank_mean"] = float(np.mean(er)) if er else None
+                        entry["nonfinite"] = sum(int(x.get("nonfinite", 0)) for x in c)
                     cells[k][task][str(T)][f"{sig:.2f}"] = entry
     sol_a = [(e["r_slip_mean"], e["acc_mean"]) for T in Ts for e in cells["soliton"]["A"][str(T)].values()
-             if "r_slip_mean" in e]
+             if e.get("r_slip_mean") is not None]
     secondary["spearman_rslip_acc_soliton_A"] = spearman([a for a, _ in sol_a], [b for _, b in sol_a]) \
         if len(sol_a) >= 3 else None
     secondary["models"] = {}
@@ -334,10 +338,23 @@ def main() -> int:
         print("refused: analyze.py differs from the SHA-256 pinned in prereg.json")
         return 2
     prereg_sha = sha256(prereg_path)
+    try:
+        tag_commit = subprocess.run(["git", "rev-parse", "--verify", f"refs/tags/{prereg['tag']}^{{commit}}"],
+                                    cwd=ROOT, check=True, capture_output=True, text=True).stdout.strip()
+        rel = subprocess.run(["git", "rev-parse", "--show-prefix"], cwd=ROOT, check=True, capture_output=True,
+                             text=True).stdout.strip()
+        tagged = subprocess.run(["git", "show", f"{tag_commit}:{rel}prereg.json"], cwd=ROOT, check=True,
+                                capture_output=True).stdout
+    except subprocess.CalledProcessError:
+        print(f"refused: tag {prereg['tag']} or its prereg.json cannot be resolved")
+        return 2
+    if tagged != prereg_path.read_bytes():
+        print(f"refused: prereg.json differs from the one at tag {prereg['tag']}")
+        return 2
     gate_path = ROOT / "results" / "gate.json"
     gate = json.loads(gate_path.read_text()) if gate_path.exists() else None
     named = [(p.name, json.loads(p.read_text())) for p in sorted((ROOT / "results" / "manifests").glob("*.json"))]
-    problems = admit(prereg, prereg_sha, named, gate)
+    problems = admit(prereg, prereg_sha, named, gate, tag_commit)
     if problems:
         print(f"refused: {len(problems)} admission problems")
         for x in problems[:20]:

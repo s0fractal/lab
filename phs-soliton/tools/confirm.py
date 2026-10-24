@@ -123,16 +123,9 @@ def name(kind: str, task: str, T: int, seed: int) -> str:
 
 
 def model_config(prereg: dict, kind: str, task: str) -> dict:
-    from phs import tasks
-    from phs.models import build, count_params
-    import torch
-    cfg = dict(prereg["optimisation"])
-    cfg.update(prereg["models"][kind]["config"])
-    if kind == "gru_pm":
-        spec = tasks.TASKS[task]
-        sol = dict(prereg["optimisation"], **prereg["models"]["soliton"]["config"])
-        cfg["pm_target"] = count_params(build("soliton", spec["vocab"], spec["classes"], sol, torch.Generator()))
-    return cfg
+    """The registered configuration of a run, from prereg.json alone (no phs/ import in the parent)."""
+    import analyze
+    return analyze.expected_config(prereg, kind, task)
 
 
 def grid(prereg: dict) -> list:
@@ -142,12 +135,48 @@ def grid(prereg: dict) -> list:
     return sorted(jobs, key=lambda j: (-cost[j[0]] * j[2], j))
 
 
+PHS_MODULES = ("phs", "phs.tasks", "phs.core", "phs.models", "phs.train")   # dependency order
+
+
+def load_verified(tag_commit: str):
+    """Import phs/ from bytes read once and checked against the tag's blobs, so the code that runs is the code that
+    was checked (no window between a check and an import). Returns phs.train."""
+    import types
+    if any(name in sys.modules for name in PHS_MODULES):
+        raise RuntimeError("phs was imported before verification")
+    top = Path(git("rev-parse", "--show-toplevel"))
+    rel = ROOT.relative_to(top).as_posix()
+    blobs = {}
+    for line in git("ls-tree", "-r", "--full-tree", tag_commit, "--", f"{rel}/phs").splitlines():
+        meta, path = line.split("\t", 1)
+        blobs[path] = meta.split()[2]
+    for name in PHS_MODULES:
+        parts = name.split(".")
+        path = ROOT.joinpath(*parts, "__init__.py") if len(parts) == 1 else ROOT.joinpath(*parts).with_suffix(".py")
+        data = path.read_bytes()
+        key = path.relative_to(top).as_posix()
+        if blobs.get(key) != hashlib.sha1(b"blob %d\0" % len(data) + data).hexdigest():
+            raise RuntimeError(f"{key} differs from {tag_commit[:12]}")
+        module = types.ModuleType(name)
+        module.__file__ = str(path)
+        module.__package__ = "phs"
+        if len(parts) == 1:
+            module.__path__ = [str(path.parent)]
+        sys.modules[name] = module
+        exec(compile(data, str(path), "exec"), module.__dict__)
+    return sys.modules["phs.train"]
+
+
 def work(args):
     kind, task, T, seed, cfg, ctx = args
-    problems = source_problems(ctx["tag_commit"])   # before anything of phs/ is imported in this process
+    problems = source_problems(ctx["tag_commit"])
     if problems:
         return {"abort": problems}
-    from phs.train import peak_rss_bytes, run, setup_determinism
+    try:
+        train = load_verified(ctx["tag_commit"])
+    except RuntimeError as e:
+        return {"abort": [str(e)]}
+    peak_rss_bytes, run, setup_determinism = train.peak_rss_bytes, train.run, train.setup_determinism
     setup_determinism(1)
     t0 = time.time()
     try:

@@ -7,7 +7,7 @@ import numpy as np
 import torch
 
 from phs import tasks
-from phs.train import evaluate
+from phs.train import eligible, evaluate
 
 
 class HalfNaN(torch.nn.Module):
@@ -31,6 +31,31 @@ class TestNonFinite(unittest.TestCase):
         self.assertEqual(out["nonfinite"], 32)
         self.assertEqual(out["acc"], 0.5)
         self.assertTrue(np.isfinite(out["loss"]))
+
+
+class Saturated(torch.nn.Module):
+    """Finite logits so extreme that the cross-entropy of a wrong class overflows to inf."""
+
+    family = "gru"
+
+    def forward(self, x, sigma, generator=None, diagnostics=False):
+        B, T = x.shape
+        logits = torch.zeros((B, T, tasks.TASKS["A"]["classes"]))
+        logits[..., 0] = torch.finfo(torch.float32).max
+        logits[..., 1] = -torch.finfo(torch.float32).max
+        return logits, {}
+
+
+class TestEligibility(unittest.TestCase):
+    def test_infinite_validation_loss_is_not_eligible(self):
+        b = tasks.batch("A", np.random.default_rng(1), 64, 16, sigma=0.0)
+        b["targets"][:, -1] = np.where(np.arange(64) % 2 == 0, 0, 1)
+        v = evaluate(Saturated(), "A", b, seed=0)
+        self.assertEqual(v["nonfinite"], 0)
+        self.assertFalse(np.isfinite(v["loss"]))
+        self.assertFalse(eligible(v))
+        self.assertTrue(eligible({"nonfinite": 0, "loss": 0.3, "acc": 0.9}))
+        self.assertFalse(eligible({"nonfinite": 1, "loss": 0.3, "acc": 0.9}))
 
 
 if __name__ == "__main__":

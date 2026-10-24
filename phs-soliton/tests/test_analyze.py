@@ -190,6 +190,15 @@ class TestVerdicts(unittest.TestCase):
         out = analyze.compute(PREREG, "x", manifests(BASE), GATE, REGISTERED)
         self.assertEqual(json.loads(json.dumps(out))["verdict"], "CONFIRMED")
 
+    def test_cell_without_finite_sequences_does_not_break_aggregation(self):
+        ms = manifests(BASE)
+        for m in ms:
+            if m["kind"] == "soliton" and m["task"] == "A" and m["seed"] == 1:
+                m["cells"]["0.30"] = {"acc": 0.0, "nonfinite": 4096}
+        out = analyze.compute(PREREG, "x", ms, GATE, REGISTERED)
+        self.assertEqual(out["cells"]["soliton"]["A"]["16"]["0.30"]["nonfinite"], 4 * 4096 // 4)
+        self.assertIsNotNone(out["cells"]["soliton"]["A"]["16"]["0.30"]["r_slip_mean"])
+
     def test_gru_pm_is_not_in_the_verdict(self):
         ms = manifests(dict(BASE, gru_pm=robust), drop={("gru_pm", "A", 16, 0)})
         self.assertEqual(verdict(ms), "CONFIRMED")
@@ -197,7 +206,7 @@ class TestVerdicts(unittest.TestCase):
 
 class TestAdmission(unittest.TestCase):
     def problems(self, named, gate=GATE):
-        return analyze.admit(PREREG, "x", named, gate)
+        return analyze.admit(PREREG, "x", named, gate, "c0ffee")
 
     def test_registered_runs_are_admitted(self):
         self.assertEqual(self.problems(admissible(manifests(BASE))), [])
@@ -231,10 +240,23 @@ class TestAdmission(unittest.TestCase):
         named[7][1]["cfg"] = dict(named[7][1]["cfg"], lr=0.5)
         self.assertTrue(any("configuration" in p for p in self.problems(named)))
 
+    def test_manifests_must_name_the_tag(self):
+        for broken in (None, "deadbeef"):   # the gate is right: only the manifests' own check can refuse
+            named = admissible(manifests(BASE))
+            for _, m in named:
+                m["tag_commit"] = broken
+            self.assertTrue(any(p.endswith(".json: ran at " + repr(broken) + ", not at the tag c0ffee")
+                                for p in self.problems(named, GATE)))
+
+    def test_gate_must_name_the_tag(self):
+        for broken in (None, "deadbeef"):   # the manifests are right: only the gate's check can refuse
+            self.assertTrue(any(p.startswith("the gate ran at")
+                                for p in self.problems(admissible(manifests(BASE)), dict(GATE, tag_commit=broken))))
+
     def test_mixed_tags_are_refused(self):
         named = admissible(manifests(BASE))
         named[2][1]["tag_commit"] = "deadbeef"
-        self.assertTrue(any("tag commits" in p for p in self.problems(named)))
+        self.assertTrue(any(p.startswith(named[2][0]) for p in self.problems(named)))
         self.assertTrue(any("gate" in p for p in self.problems(admissible(manifests(BASE)),
                                                               dict(GATE, tag_commit="deadbeef"))))
 

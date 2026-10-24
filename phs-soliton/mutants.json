@@ -286,15 +286,6 @@
     "tests.test_analyze.TestAdmission.test_other_configuration_is_refused"
    ]
   },
-  "analyze-admit-tags": {
-   "claim": "Admission refuses manifests from several tag commits (D20).",
-   "file": "analyze.py",
-   "find": "if len(tags) > 1:",
-   "replace": "if False:",
-   "kills": [
-    "tests.test_analyze.TestAdmission.test_mixed_tags_are_refused"
-   ]
-  },
   "train-nonfinite-as-hit": {
    "claim": "A non-finite sequence counts as wrong, never as an argmax hit (D21).",
    "file": "phs/train.py",
@@ -302,6 +293,33 @@
    "replace": "hit = (logits[:, -1].argmax(-1) == targets[sl][:, -1])",
    "kills": [
     "tests.test_train.TestNonFinite.test_nonfinite_sequences_count_as_wrong"
+   ]
+  },
+  "analyze-admit-tag": {
+   "claim": "Admission requires every manifest to name the commit the PREREG tag resolves to (D20).",
+   "file": "analyze.py",
+   "find": "if m.get(\"tag_commit\") != tag_commit:",
+   "replace": "if False:",
+   "kills": [
+    "tests.test_analyze.TestAdmission.test_manifests_must_name_the_tag"
+   ]
+  },
+  "train-eligible-infinite-loss": {
+   "claim": "A validation checkpoint with an infinite loss is not eligible (D21).",
+   "file": "phs/train.py",
+   "find": "return v[\"nonfinite\"] == 0 and math.isfinite(v[\"loss\"])",
+   "replace": "return v[\"nonfinite\"] == 0",
+   "kills": [
+    "tests.test_train.TestEligibility.test_infinite_validation_loss_is_not_eligible"
+   ]
+  },
+  "analyze-admit-gate-tag": {
+   "claim": "Admission requires the gate to name the commit the PREREG tag resolves to (D20).",
+   "file": "analyze.py",
+   "find": "if gate is not None and gate.get(\"tag_commit\") != tag_commit:",
+   "replace": "if False:",
+   "kills": [
+    "tests.test_analyze.TestAdmission.test_gate_must_name_the_tag"
    ]
   }
  }

@@ -86,11 +86,16 @@ def evaluate(model, task: str, b: dict, seed: int, chunk: int = 1024) -> dict:
     n = x.shape[0]
     out = {"acc": float(torch.cat(hits).double().mean()), "loss": sum(losses) / finite_n if finite_n else math.inf,
            "n": n, "nonfinite": nonfinite}
-    if slip and finite_n:
-        out["r_slip"] = float(torch.cat(slip).mean())
-        out["erank"] = float(torch.cat(ranks).mean())
+    if model.family == "phs":   # None where no sequence of the cell is finite
+        out["r_slip"] = float(torch.cat(slip).mean()) if finite_n else None
+        out["erank"] = float(torch.cat(ranks).mean()) if finite_n else None
     model.train()
     return out
+
+
+def eligible(v: dict) -> bool:
+    """A validation checkpoint counts only with every output finite and a finite loss."""
+    return v["nonfinite"] == 0 and math.isfinite(v["loss"])
 
 
 def flops_per_token(kind: str, cfg: dict, vocab: int, classes: int, hidden: int | None = None) -> int:
@@ -158,8 +163,7 @@ def run(kind: str, task: str, T: int, seed: int, cfg: dict, sigmas=tasks.SIGMA_G
         if step % cfg["eval_every"] == 0 or step == cfg["steps"]:
             v = evaluate(model, task, val, tasks.derive_seed("valnoise", task, T, seed))
             record["val"].append([step, v["acc"], v["loss"], v["nonfinite"]])
-            # a checkpoint with any non-finite validation output is not eligible
-            if v["nonfinite"] == 0 and (v["acc"], -v["loss"]) > (best[0], -best[1]):
+            if eligible(v) and (v["acc"], -v["loss"]) > (best[0], -best[1]):
                 best = (v["acc"], v["loss"], step, copy.deepcopy(model.state_dict()))
             if progress:
                 progress(f"{kind} {task} T={T} seed={seed} step {step}: loss {float(loss.detach()):.4f} "
