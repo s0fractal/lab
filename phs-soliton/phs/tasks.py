@@ -80,9 +80,10 @@ def digest(b: dict) -> str:
     return h.hexdigest()
 
 
-def test_set(task: str, T: int, sigma: float, n: int = 4096) -> dict:
-    """The fixed test cell (task, T, sigma): its own seed, shared by every model and seed."""
-    rng = np.random.default_rng(derive_seed("test", task, T, f"{sigma:.2f}"))
+def test_set(task: str, T: int, sigma: float, n: int = 4096, namespace: str = "test") -> dict:
+    """The fixed test cell (task, T, sigma): its own seed, shared by every model and seed. Calibration reads
+    cells of the same shape from the namespace "calib", never the test cells."""
+    rng = np.random.default_rng(derive_seed(namespace, task, T, f"{sigma:.2f}"))
     return batch(task, rng, n, T, sigma=sigma)
 
 

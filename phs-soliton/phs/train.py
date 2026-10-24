@@ -113,7 +113,7 @@ def step_cost_ms(model, task: str, T: int, batch: int = 64, reps: int = 3) -> fl
 
 
 def run(kind: str, task: str, T: int, seed: int, cfg: dict, sigmas=tasks.SIGMA_GRID, n_test: int = 4096,
-        test_cells: bool = True, log_every: int = 50, progress=None) -> dict:
+        test_cells: bool = True, namespace: str = "test", log_every: int = 50, progress=None) -> dict:
     """Train one model and evaluate it. cfg holds the model settings (N, d, dt, S, gamma, u_max, m_pin, ...) and
     the shared optimisation settings SHARED_KEYS. Returns a JSON-able record; a non-finite loss stops the run with
     status FAILED and its reason."""
@@ -169,11 +169,12 @@ def run(kind: str, task: str, T: int, seed: int, cfg: dict, sigmas=tasks.SIGMA_G
     if test_cells:
         cells = {}
         for s in sigmas:
-            b = tasks.test_set(task, T, s, n=n_test)
-            ev = evaluate(model, task, b, tasks.derive_seed("evalnoise", task, T, f"{s:.2f}", seed))
+            b = tasks.test_set(task, T, s, n=n_test, namespace=namespace)
+            ev = evaluate(model, task, b, tasks.derive_seed(namespace + "noise", task, T, f"{s:.2f}", seed))
             ev["digest"] = tasks.digest(b)
             cells[f"{s:.2f}"] = ev
         record["cells"] = cells
+        record["cell_namespace"] = namespace
         record["c_step_ms"] = step_cost_ms(model, task, T)
         record["flops_per_token"] = flops_per_token(kind, cfg, spec["vocab"], spec["classes"],
                                                     getattr(model, "hidden", None))
