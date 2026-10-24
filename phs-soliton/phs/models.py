@@ -60,6 +60,7 @@ class PHSModel(nn.Module):
             return out
         return out, {"q_top": torch.stack(charges, dim=1), "theta_T": theta.detach()}
 
+    @torch.no_grad()
     def learned_physics(self) -> dict:
         phys = self.core.physics()
         return {"kappa": float(phys.kappa), "g_lat": float(phys.g_lat), "g_pin": float(phys.g_pin),
