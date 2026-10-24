@@ -252,7 +252,7 @@ def admitted_gate(pre: dict) -> dict:
         raise SystemExit("refused: " + "; ".join(problems[:5]))
     import analyze
     named = [(p.name, json.loads(p.read_text())) for p in sorted(MANIFESTS.glob("*.json"))]
-    problems = analyze.admit(pre["prereg"], pre["prereg_sha256"], named, gate)
+    problems = analyze.admit(pre["prereg"], pre["prereg_sha256"], named, gate, pre["tag_commit"])
     if problems:
         raise SystemExit(f"refused: existing manifests are not admissible: {problems[:5]}")
     return gate

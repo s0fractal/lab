@@ -170,6 +170,7 @@ def figures(r: dict, prereg: dict) -> None:
             ax.plot([p[0] for p in pts], [p[1] for p in pts], color=COLOR[k], marker=MARKER[k], markersize=6,
                     linewidth=2, label=NAMES[k])
     ax.set_xscale("log", base=2)
+    ax.set_xlim(Ts[0] / 1.3, Ts[-1] * 1.3)
     ax.set_xticks(Ts, [str(T) for T in Ts])
     style(ax, "T", "σ_crit (task A)")
     if ax.get_legend_handles_labels()[1]:
