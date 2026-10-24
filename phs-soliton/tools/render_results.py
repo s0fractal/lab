@@ -17,7 +17,7 @@ NAMES = {"pure": "Pure-PHS", "soliton": "Soliton-PHS", "gru": "Control-GRU", "gr
 # categorical slots 1-4 of the reference palette (fixed order, never cycled), with a marker as secondary encoding
 COLOR = {"pure": "#2a78d6", "soliton": "#eb6834", "gru": "#1baf7a", "gru_pm": "#eda100"}
 MARKER = {"pure": "o", "soliton": "s", "gru": "^", "gru_pm": "v"}
-# ordinal blue ramp for sigma, light -> dark
+# ordinal blue ramp (T in the R_slip scatter), light -> dark
 SIGMA_RAMP = ["#9ec5f4", "#6da7ec", "#3987e5", "#2a78d6", "#256abf", "#1c5cab", "#184f95", "#0d366b"]
 INK, MUTED, GRID, SURFACE = "#0b0b0b", "#52514e", "#e4e3df", "#fcfcfb"
 
@@ -128,27 +128,34 @@ def figures(r: dict, prereg: dict) -> None:
     g = prereg["grid"]
     FIG.mkdir(exist_ok=True)
     Ts = g["T"]
+    from matplotlib.colors import LinearSegmentedColormap
+    cmap = LinearSegmentedColormap.from_list("acc", ["#cde2fb", "#86b6ef", "#3987e5", "#256abf", "#184f95", "#0d366b"])
     for task in ("A", "B"):
-        fig, axes = plt.subplots(1, len(g["models"]), figsize=(3.2 * len(g["models"]), 3.0), sharey=True,
-                                 facecolor=SURFACE)
+        fig, axes = plt.subplots(len(g["models"]), 1, figsize=(0.42 * len(g["sigma"]) + 2.2, 1.25 * len(g["models"]) + 1.2),
+                                 facecolor=SURFACE, sharex=True)
         for ax, k in zip(axes, g["models"]):
-            for i, s in enumerate(g["sigma"]):
-                ys = [r["cells"].get(k, {}).get(task, {}).get(str(T), {}).get(f"{s:.2f}", {}).get("acc_mean")
-                      for T in Ts]
-                pts = [(T, y) for T, y in zip(Ts, ys) if y is not None]
-                if pts:
-                    ax.plot([p[0] for p in pts], [p[1] for p in pts], color=SIGMA_RAMP[i], linewidth=2,
-                            marker="o", markersize=4, label=f"σ {s:.2f}")
-            ax.set_xscale("log", base=2)
-            ax.set_xticks(Ts, [str(T) for T in Ts])
-            ax.set_title(NAMES[k], color=INK, fontsize=10)
-            style(ax, "T", "Acc(T)" if k == g["models"][0] else "")
-        handles, labels = axes[0].get_legend_handles_labels()
-        fig.legend(handles, labels, loc="lower center", ncol=len(labels), fontsize=8, frameon=False,
-                   labelcolor=MUTED)
-        fig.suptitle(f"Task {task}: accuracy at the last step, mean over seeds", color=INK, fontsize=11)
-        fig.tight_layout(rect=(0, 0.08, 1, 1))
-        fig.savefig(FIG / f"acc_T_sigma_{task}.png", dpi=130, facecolor=SURFACE)
+            grid_acc = [[r["cells"].get(k, {}).get(task, {}).get(str(T), {}).get(f"{s:.2f}", {}).get("acc_mean",
+                                                                                                float("nan"))
+                         for s in g["sigma"]] for T in Ts]
+            im = ax.imshow(grid_acc, cmap=cmap, vmin=0, vmax=1, aspect="auto", interpolation="nearest")
+            for yi, row in enumerate(grid_acc):
+                for xi, v in enumerate(row):
+                    if v == v:
+                        ax.text(xi, yi, f"{v:.2f}"[1:] if v < 1 else "1", ha="center", va="center", fontsize=6,
+                                color=INK if v < 0.55 else SURFACE)
+            ax.set_yticks(range(len(Ts)), [str(T) for T in Ts])
+            ax.set_ylabel(f"{NAMES[k]}\nT", color=MUTED, fontsize=8)
+            ax.tick_params(colors=MUTED, labelsize=7)
+            for side in ax.spines.values():
+                side.set_visible(False)
+            if "train_sigma" in g:
+                edge = len([s for s in g["sigma"] if s <= max(g["train_sigma"]) + 1e-9]) - 0.5
+                ax.axvline(edge, color=MUTED, linewidth=1, linestyle=(0, (3, 2)))
+        axes[-1].set_xticks(range(len(g["sigma"])), [f"{s:.2f}" for s in g["sigma"]], rotation=90)
+        axes[-1].set_xlabel("σ (dashed line: top of the training grid)", color=MUTED, fontsize=8)
+        fig.colorbar(im, ax=axes, shrink=0.6, label="Acc, mean over seeds")
+        fig.suptitle(f"Task {task}: accuracy at the last step by (T, σ)", color=INK, fontsize=11)
+        fig.savefig(FIG / f"acc_T_sigma_{task}.png", dpi=130, facecolor=SURFACE, bbox_inches="tight")
         plt.close(fig)
     fig, ax = plt.subplots(figsize=(5.2, 3.4), facecolor=SURFACE)
     for k in g["models"]:
@@ -165,7 +172,8 @@ def figures(r: dict, prereg: dict) -> None:
     ax.set_xscale("log", base=2)
     ax.set_xticks(Ts, [str(T) for T in Ts])
     style(ax, "T", "σ_crit (task A)")
-    ax.legend(fontsize=8, frameon=False, labelcolor=MUTED)
+    if ax.get_legend_handles_labels()[1]:
+        ax.legend(fontsize=8, frameon=False, labelcolor=MUTED)
     ax.set_title("σ_crit by T: mean (line) and seeds (points)", color=INK, fontsize=10)
     fig.tight_layout()
     fig.savefig(FIG / "sigma_crit_T.png", dpi=130, facecolor=SURFACE)
@@ -178,7 +186,8 @@ def figures(r: dict, prereg: dict) -> None:
         ax.scatter(xs, ys, color=SIGMA_RAMP[2 * j + 1], s=28, marker="o", edgecolors=SURFACE, linewidths=1,
                    label=f"T {T}")
     style(ax, "R_slip (slips per sequence, holding segment)", "Acc")
-    ax.legend(fontsize=8, frameon=False, labelcolor=MUTED)
+    if ax.get_legend_handles_labels()[1]:
+        ax.legend(fontsize=8, frameon=False, labelcolor=MUTED)
     rho = r["secondary"].get("spearman_rslip_acc_soliton_A")
     ax.set_title(f"Soliton-PHS, task A cells: Spearman ρ = {fmt(rho, 3)}", color=INK, fontsize=10)
     fig.tight_layout()

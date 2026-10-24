@@ -109,7 +109,7 @@ def work(args):
     setup_determinism(1)
     t0 = time.time()
     try:
-        rec = run(kind, task, T, seed, cfg, n_test=ctx["n_test"], namespace="test")
+        rec = run(kind, task, T, seed, cfg, sigmas=tuple(ctx["sigmas"]), n_test=ctx["n_test"], namespace="test")
     except Exception as e:  # a crash is a recorded failure, not a silent gap
         rec = {"kind": kind, "task": task, "T": T, "seed": seed, "cfg": cfg, "status": "FAILED",
                "reason": f"{type(e).__name__}: {e}", "wall_seconds": time.time() - t0,
@@ -132,7 +132,7 @@ def write_manifest(rec: dict) -> Path:
 def context(pre: dict) -> dict:
     return {"commit": pre["commit"], "tag": pre["tag"], "tag_commit": pre["tag_commit"],
             "prereg_sha256": pre["prereg_sha256"], "environment": environment(),
-            "n_test": pre["prereg"]["tasks"]["n_test"]}
+            "n_test": pre["prereg"]["tasks"]["n_test"], "sigmas": pre["prereg"]["grid"]["sigma"]}
 
 
 def cmd_gate() -> int:
@@ -163,6 +163,10 @@ def cmd_run(workers: int) -> int:
     gate_path = RESULTS / "gate.json"
     if not gate_path.exists() or json.loads(gate_path.read_text()).get("prereg_sha256") != pre["prereg_sha256"]:
         raise SystemExit("refused: run `tools/confirm.py gate` first")
+    foreign = [p.name for p in sorted(MANIFESTS.glob("*.json"))
+               if json.loads(p.read_text()).get("prereg_sha256") != pre["prereg_sha256"]]
+    if foreign:
+        raise SystemExit(f"refused: {len(foreign)} manifests name another PREREG, e.g. {foreign[:3]}")
     ctx = context(pre)
     todo = [j for j in grid(pre["prereg"]) if not (MANIFESTS / (name(*j) + ".json")).exists()]
     jobs = [(k, t, T, s, model_config(pre["prereg"], k, t), ctx) for k, t, T, s in todo]

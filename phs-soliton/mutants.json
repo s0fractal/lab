@@ -135,8 +135,8 @@
   "analyze-perm-strict": {
    "claim": "The exact permutation p-value counts the observed split itself (min p = 1/252).",
    "file": "analyze.py",
-   "find": "count += d >= observed - EPS",
-   "replace": "count += d > observed + EPS",
+   "find": "count += bool(d >= observed - EPS)",
+   "replace": "count += bool(d > observed + EPS)",
    "kills": [
     "tests.test_analyze.TestPrimitives.test_exact_permutation"
    ]

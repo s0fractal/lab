@@ -53,9 +53,9 @@ def permutation_p(x: list, y: list) -> tuple[float, int]:
         mask = np.zeros(len(pooled), bool)
         mask[list(idx)] = True
         d = pooled[mask].mean() - pooled[~mask].mean()
-        count += d >= observed - EPS
+        count += bool(d >= observed - EPS)
         total += 1
-    return count / total, total
+    return float(count / total), total
 
 
 def holm(ps: dict, alpha: float) -> dict:
@@ -64,7 +64,7 @@ def holm(ps: dict, alpha: float) -> dict:
     out, still = {}, True
     for i, k in enumerate(order):
         still = still and ps[k] <= alpha / (len(order) - i)
-        out[k] = still
+        out[k] = bool(still)
     return out
 
 
@@ -117,6 +117,9 @@ def compute(prereg: dict, prereg_sha: str, manifest_list: list, gate: dict | Non
                                          rule["acc_threshold"], rule["sigma_crit_below_grid"]) for T in Ts}
                 row["sigma_crit_T"] = sc
                 row["sigma_crit_mean"] = float(np.mean(list(sc.values())))
+                # secondary: the same threshold read on the PDF's grid only (sigma <= train grid top)
+                top = max(grid.get("train_sigma", sigmas))
+                row["sigma_crit_mean_pdf_grid"] = float(np.mean([min(v, top) for v in sc.values()]))
                 row["lambda"] = slope([np.log2(T) for T in Ts], [acc(k, "A", T, s, rule["sigma_ref"]) for T in Ts])
                 row["acc_A_T16_sigma0"] = acc(k, "A", Ts[0], s, 0.0)
             if ok_b:

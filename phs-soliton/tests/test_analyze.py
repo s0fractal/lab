@@ -137,6 +137,11 @@ class TestVerdicts(unittest.TestCase):
         self.assertEqual(verdict(manifests(BASE), gate=dict(GATE, mutants_killed=12)), "INCONCLUSIVE")
         self.assertEqual(verdict(manifests(BASE), gate=None), "INCONCLUSIVE")
 
+    def test_results_serialize_as_json(self):
+        import json
+        out = analyze.compute(PREREG, "x", manifests(BASE), GATE)
+        self.assertEqual(json.loads(json.dumps(out))["verdict"], "CONFIRMED")
+
     def test_gru_pm_is_not_in_the_verdict(self):
         ms = manifests(dict(BASE, gru_pm=robust), drop={("gru_pm", "A", 16, 0)})
         self.assertEqual(verdict(ms), "CONFIRMED")
