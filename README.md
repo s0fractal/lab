@@ -4,7 +4,7 @@
 
 | Каталог | Що це | Стан |
 |---|---|---|
-| [`phs-soliton/`](phs-soliton/) | Порт-гамільтонові та солітонні рекурентні резервуари проти GRU: [стартер](phs-soliton/starter/port-hamiltonian-soliton-reservoirs.md), [goal](phs-soliton/GOAL.md) | стартер перевірено (12/12), goal готовий, прогонів ще немає |
+| [`phs-soliton/`](phs-soliton/) | Порт-гамільтонові та солітонні рекурентні резервуари проти GRU: [стартер](phs-soliton/starter/port-hamiltonian-soliton-reservoirs.md), [goal](phs-soliton/GOAL.md) | PREREG v1 (тег `prereg-v1`), 160 підтверджувальних прогонів, вердикт `INCONCLUSIVE`: [REPORT](phs-soliton/REPORT.md), [RESULTS](phs-soliton/RESULTS.md) |
 
 Перевірка тверджень стартера `phs-soliton`:
 
