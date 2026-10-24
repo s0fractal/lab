@@ -146,14 +146,14 @@ def run(kind: str, task: str, T: int, seed: int, cfg: dict, sigmas=tasks.SIGMA_G
             break
         opt.step()
         if step % log_every == 0:
-            record["curve"].append([step, float(loss), float(hits.double().mean())])
+            record["curve"].append([step, float(loss.detach()), float(hits.double().mean())])
         if step % cfg["eval_every"] == 0 or step == cfg["steps"]:
             v = evaluate(model, task, val, tasks.derive_seed("valnoise", task, T, seed))
             record["val"].append([step, v["acc"], v["loss"]])
             if (v["acc"], -v["loss"]) > (best[0], -best[1]):
                 best = (v["acc"], v["loss"], step, copy.deepcopy(model.state_dict()))
             if progress:
-                progress(f"{kind} {task} T={T} seed={seed} step {step}: loss {float(loss):.4f} "
+                progress(f"{kind} {task} T={T} seed={seed} step {step}: loss {float(loss.detach()):.4f} "
                          f"val acc {v['acc']:.4f} ({time.perf_counter() - t_start:.0f}s)")
     record["train_seconds"] = time.perf_counter() - t_start
     if best[3] is None:
