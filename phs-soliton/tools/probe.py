@@ -59,6 +59,9 @@ def main(argv: list[str]) -> int:
             print(f"refused: {p['id']} names {p['trial']}, which is not a tried {p['kind']} configuration")
             return 2
         cfg = job_config(p["kind"], p["task"], tried["overrides"], sh)
+        extra = p.get("steps")
+        if extra is not None:   # the only setting a probe may change: the shared step count, decided by time
+            cfg["steps"] = extra
         jobs.append((p, cfg, dict(sh, commit=head)))
     print(f"{len(jobs)} probes, {workers} workers, commit {head}", flush=True)
     t0 = time.time()

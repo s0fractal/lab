@@ -115,8 +115,8 @@ def step_cost_ms(model, task: str, T: int, batch: int = 64, reps: int = 3) -> fl
 def run(kind: str, task: str, T: int, seed: int, cfg: dict, sigmas=tasks.SIGMA_GRID, n_test: int = 4096,
         test_cells: bool = True, namespace: str = "test", log_every: int = 50, progress=None) -> dict:
     """Train one model and evaluate it. cfg holds the model settings (N, d, dt, S, gamma, u_max, m_pin, ...) and
-    the shared optimisation settings SHARED_KEYS. Returns a JSON-able record; a non-finite loss stops the run with
-    status FAILED and its reason."""
+    the shared optimisation settings SHARED_KEYS. Returns a JSON-able record. A non-finite loss or gradient stops
+    training (diverged_at_step); the run keeps its best validation checkpoint and is FAILED only if it has none."""
     t_start = time.perf_counter()
     spec = tasks.TASKS[task]
     init_gen = torch.Generator().manual_seed(tasks.derive_seed("init", kind, task, T, seed))
@@ -135,14 +135,14 @@ def run(kind: str, task: str, T: int, seed: int, cfg: dict, sigmas=tasks.SIGMA_G
         x, targets, sigma = to_torch(tasks.batch(task, stream, cfg["batch"], T))
         logits = model(x, sigma, generator=noise_gen)
         loss, hits = loss_and_hits(task, logits, targets)
-        if not torch.isfinite(loss):
-            record.update(status="FAILED", reason=f"non-finite training loss at step {step}")
+        if not torch.isfinite(loss):   # stop; the run keeps its best validation checkpoint so far
+            record.update(diverged_at_step=step, reason=f"non-finite training loss at step {step}")
             break
         opt.zero_grad(set_to_none=True)
         loss.backward()
         gnorm = torch.nn.utils.clip_grad_norm_(model.parameters(), cfg["clip"])
         if not torch.isfinite(gnorm):
-            record.update(status="FAILED", reason=f"non-finite gradient norm at step {step}")
+            record.update(diverged_at_step=step, reason=f"non-finite gradient norm at step {step}")
             break
         opt.step()
         if step % log_every == 0:
