@@ -87,8 +87,72 @@ def spearman(a: list, b: list) -> float:
     return float(np.corrcoef(ra, rb)[0, 1])
 
 
-def compute(prereg: dict, prereg_sha: str, manifest_list: list, gate: dict | None) -> dict:
-    """The whole analysis as a function of its inputs (tests/test_analyze.py drives it with synthetic manifests)."""
+def expected_config(prereg: dict, kind: str, task: str) -> dict:
+    cfg = dict(prereg["optimisation"])
+    cfg.update(prereg["models"][kind]["config"])
+    if kind == "gru_pm":
+        cfg["pm_target"] = prereg["models"]["soliton"]["params"][task]
+    return cfg
+
+
+def run_name(kind: str, task: str, T: int, seed: int) -> str:
+    return f"{task}-{kind}-T{T:03d}-s{seed}"
+
+
+def admit(prereg: dict, prereg_sha: str, named: list, gate: dict | None) -> list:
+    """Every reason the manifests (file name, manifest) cannot stand for runs of this PREREG; [] admits them.
+    A manifest must be one expected run, once, under its own name, from the same tag as every other manifest and the
+    gate, with the registered configuration, environment and test cells (namespace, digests, sizes)."""
+    g, env = prereg["grid"], prereg["environment"]
+    expected = {(k, t, T, s) for k in g["models"] for t in ("A", "B") for T in g["T"] for s in g["seeds"]}
+    cells = {f"{s:.2f}" for s in g["sigma"]}
+    problems, seen, tags = [], {}, set()
+    for fname, m in named:
+        try:
+            ident = (m["kind"], m["task"], m["T"], m["seed"])
+        except (KeyError, TypeError):
+            problems.append(f"{fname}: no run identity")
+            continue
+        if ident not in expected:
+            problems.append(f"{fname}: {ident} is not a run of the grid")
+            continue
+        if fname != run_name(*ident) + ".json":
+            problems.append(f"{fname}: names run {run_name(*ident)}")
+        if ident in seen:
+            problems.append(f"{fname}: duplicate of {seen[ident]}")
+        seen[ident] = fname
+        if m.get("prereg_sha256") != prereg_sha:
+            problems.append(f"{fname}: another PREREG")
+        tags.add(m.get("tag_commit"))
+        if m.get("status") not in ("OK", "FAILED"):
+            problems.append(f"{fname}: status {m.get('status')!r}")
+        if m.get("cfg") != expected_config(prereg, ident[0], ident[1]):
+            problems.append(f"{fname}: configuration differs from PREREG")
+        for key in ("python", "torch", "numpy"):
+            if m.get("environment", {}).get(key) != env[key]:
+                problems.append(f"{fname}: {key} {m.get('environment', {}).get(key)} is not {env[key]}")
+        if m.get("status") == "OK":
+            if m.get("cell_namespace") != "test":
+                problems.append(f"{fname}: cells from namespace {m.get('cell_namespace')!r}")
+            got = m.get("cells", {})
+            if set(got) != cells:
+                problems.append(f"{fname}: cells {sorted(set(got) ^ cells)[:3]} differ from the grid")
+            for key in cells & set(got):
+                c = got[key]
+                if c.get("digest") != prereg["tasks"]["digests"].get(f"{ident[1]}/{ident[2]}/{key}"):
+                    problems.append(f"{fname}: cell {key} digest differs from PREREG")
+                if c.get("n") != prereg["tasks"]["n_test"]:
+                    problems.append(f"{fname}: cell {key} has n = {c.get('n')}")
+    if len(tags) > 1:
+        problems.append(f"manifests come from {len(tags)} tag commits")
+    if gate is not None and tags and gate.get("tag_commit") not in tags:
+        problems.append("the gate ran at another tag commit than the manifests")
+    return problems
+
+
+def compute(prereg: dict, prereg_sha: str, manifest_list: list, gate: dict | None, registered_mutants: int) -> dict:
+    """The whole analysis as a function of admitted inputs (tests/test_analyze.py drives it with synthetic
+    manifests). registered_mutants is the number of mutants in mutants.json at the analysed tree."""
     rule, grid = prereg["verdict_rule"], prereg["grid"]
     sigmas, Ts, seeds = grid["sigma"], grid["T"], grid["seeds"]
     kinds, verdict_kinds = grid["models"], rule["verdict_models"]
@@ -122,6 +186,7 @@ def compute(prereg: dict, prereg_sha: str, manifest_list: list, gate: dict | Non
                 row["sigma_crit_mean_pdf_grid"] = float(np.mean([min(v, top) for v in sc.values()]))
                 row["lambda"] = slope([np.log2(T) for T in Ts], [acc(k, "A", T, s, rule["sigma_ref"]) for T in Ts])
                 row["acc_A_T16_sigma0"] = acc(k, "A", Ts[0], s, 0.0)
+                row["acc_A_T16_sigma_ref"] = acc(k, "A", Ts[0], s, rule["sigma_ref"])
             if ok_b:
                 row["B_mean_acc_sigma0"] = float(np.mean([acc(k, "B", T, s, 0.0) for T in Ts]))
             per_seed[k][str(s)] = row
@@ -130,6 +195,9 @@ def compute(prereg: dict, prereg_sha: str, manifest_list: list, gate: dict | Non
         vals = [per_seed[k][str(s)].get(key) for s in seeds]
         return None if any(v is None for v in vals) else vals
 
+    fl = rule["lambda_floor"]
+    sol_ref = [per_seed["soliton"][str(s)].get("acc_A_T16_sigma_ref") for s in seeds]
+    floor_ok = sum(1 for a in sol_ref if a is not None and a >= fl["acc"] - EPS) >= fl["min_seeds"]
     hyp = {}
     families = {"A": ("pure", {"A1": "sigma_crit_mean", "A2": "lambda"}),
                 "G": ("gru", {"G1": "sigma_crit_mean", "G2": "lambda"})}
@@ -151,6 +219,9 @@ def compute(prereg: dict, prereg_sha: str, manifest_list: list, gate: dict | Non
             if hyp[name]["available"]:
                 hyp[name]["holm_reject"] = rej[name]
                 hyp[name]["holds"] = bool(rej[name] and hyp[name]["delta"] >= hyp[name]["min_effect"] - EPS)
+                if members[name] == "lambda":   # a flat slope at the chance floor is no slower decay
+                    hyp[name]["floor_ok"] = floor_ok
+                    hyp[name]["holds"] = hyp[name]["holds"] and floor_ok
 
     b_sol, b_pure = column("soliton", "B_mean_acc_sigma0"), column("pure", "B_mean_acc_sigma0")
     B = {"available": b_sol is not None and b_pure is not None, "margin": rule["B_margin"]}
@@ -166,8 +237,10 @@ def compute(prereg: dict, prereg_sha: str, manifest_list: list, gate: dict | Non
         a16 = [per_seed[k][str(s)].get("acc_A_T16_sigma0") for s in seeds]
         good = sum(1 for a in a16 if a is not None and a >= rule["V_acc"] - EPS)
         v_models[k] = {"acc_A_T16_sigma0": a16, "seeds_ok": good, "holds": good >= rule["V_min_seeds"]}
-    gate_ok = bool(gate and gate.get("tests_ok") and gate.get("mutants_killed") == gate.get("mutants_total")
-                   and gate.get("mutants_total", 0) > 0 and gate.get("prereg_sha256") == prereg_sha)
+    gate_ok = bool(gate and gate.get("tests_ok") is True and gate.get("prereg_check_ok") is True
+                   and gate.get("mutants_exit") == 0 and gate.get("prereg_sha256") == prereg_sha
+                   and registered_mutants > 0
+                   and gate.get("mutants_killed") == gate.get("mutants_total") == registered_mutants)
     V = {"gate": gate, "gate_ok": gate_ok, "models": v_models,
          "holds": gate_ok and all(v["holds"] for v in v_models.values())}
 
@@ -263,17 +336,15 @@ def main() -> int:
     prereg_sha = sha256(prereg_path)
     gate_path = ROOT / "results" / "gate.json"
     gate = json.loads(gate_path.read_text()) if gate_path.exists() else None
-    manifests, foreign = [], []
-    for p in sorted((ROOT / "results" / "manifests").glob("*.json")):
-        m = json.loads(p.read_text())
-        if m.get("prereg_sha256") == prereg_sha:
-            manifests.append(m)
-        else:
-            foreign.append(p.name)
-    if foreign:
-        print(f"refused: {len(foreign)} manifests name another PREREG: {foreign[:5]}")
+    named = [(p.name, json.loads(p.read_text())) for p in sorted((ROOT / "results" / "manifests").glob("*.json"))]
+    problems = admit(prereg, prereg_sha, named, gate)
+    if problems:
+        print(f"refused: {len(problems)} admission problems")
+        for x in problems[:20]:
+            print("  " + x)
         return 2
-    out = compute(prereg, prereg_sha, manifests, gate)
+    registered = len(json.loads((ROOT / "mutants.json").read_text())["mutants"])
+    out = compute(prereg, prereg_sha, [m for _, m in named], gate, registered)
     (ROOT / "results" / "results.json").write_text(json.dumps(out, indent=1, sort_keys=True) + "\n")
     verdict, why, hyp, B, room = out["verdict"], out["verdict_reason"], out["hypotheses"], out["B"], out["room"]
     v_models, gate_ok = out["V"]["models"], out["V"]["gate_ok"]

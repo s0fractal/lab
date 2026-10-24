@@ -413,18 +413,20 @@ Test cells: 4096 sequences per (task, T, sigma), SHA-256 of `phs.tasks.digest`:
 
 The goal's reconstructed rule, tightened by decision D11 (room) and computed by the frozen analyze.py. Comparisons are one-sided exact permutation tests of the difference of means, 5 against 5 (252 splits), alpha = 0.05, Holm within each pair (A1, A2) and (G1, G2); a flag holds only with significance and the minimum effect.
 
-Parameters: `{"B_margin": 0.05, "V_acc": 0.95, "V_min_seeds": 4, "acc_threshold": 0.8, "alpha": 0.05, "min_effect": {"lambda": 0.02, "sigma_crit_mean": 0.05}, "room": {"pure_lambda_max": -0.02, "pure_sigma_crit_max": 1.95}, "sigma_crit_below_grid": -0.05, "sigma_ref": 0.1, "verdict_models": ["pure", "soliton", "gru"]}`
+Parameters: `{"B_margin": 0.05, "V_acc": 0.95, "V_min_seeds": 4, "acc_threshold": 0.8, "alpha": 0.05, "lambda_floor": {"T": 16, "acc": 0.8, "min_seeds": 4}, "min_effect": {"lambda": 0.02, "sigma_crit_mean": 0.05}, "room": {"pure_lambda_max": -0.02, "pure_sigma_crit_max": 1.95}, "sigma_crit_below_grid": -0.05, "sigma_ref": 0.1, "verdict_models": ["pure", "soliton", "gru"]}`
 
 Flags:
 
 - `A1`: Soliton > Pure on mean sigma_crit, task A (Holm-significant and delta >= 0.05).
-- `A2`: Soliton > Pure on lambda, task A (Holm-significant and delta >= 0.02 per doubling).
+- `A2`: Soliton > Pure on lambda, task A (Holm-significant and delta >= 0.02 per doubling), and the lambda floor.
 - `G1`: Soliton > Control-GRU on mean sigma_crit, task A.
-- `G2`: Soliton > Control-GRU on lambda, task A.
+- `G2`: Soliton > Control-GRU on lambda, task A, and the lambda floor.
+- `lambda floor`: Soliton-PHS reaches Acc >= 0.8 on task A at T = 16 and sigma = sigma_ref = 0.10 in at least 4 of 5 seeds; without it a flat slope may be a flat failure (decision D19).
 - `B`: Soliton not worse than Pure on task B: 5-seed mean of B mean lower by at most 0.05 (point estimate).
 - `V`: results/gate.json at the tag shows every test passing and every mutant killed, and each verdict model reaches Acc >= 0.95 on task A at T = 16, sigma = 0 in at least 4 of 5 seeds.
-- `room`: Pure-PHS 5-seed mean of mean sigma_crit <= 1.95 and mean lambda <= -0.02.
+- `room`: Pure-PHS 5-seed mean of mean sigma_crit <= 1.95, or Pure-PHS 5-seed mean lambda <= -0.02 (room on one metric suffices, decision D11).
 - `complete`: every run of the three verdict models has an OK manifest.
+- `admission`: analyze.py refuses to compute unless every manifest is one expected run, once, under its own file name, from one tag commit shared with the gate, with the registered configuration, python/torch/numpy versions, test-cell namespace, digests and sizes (decision D20).
 
 Verdict, first match wins:
 
@@ -467,6 +469,9 @@ Verdict, first match wins:
 - **D16.** Calibration (S3) used seed 100 and the 'calib' cells only; at most 12 configurations per model, every job logged in calibration/trials.jsonl (88 jobs in 5 rounds). Objective: mean over tasks A and B of the best validation accuracy at T = 32; within 0.01 of the best, the lower mean validation loss wins (rule fixed after round 1, before round 2). Selected: Pure p07, Soliton s07, GRU g06 (10 configurations used), GRU-pm q07. Pure p07 and Soliton s07 have identical settings apart from the lattice. *Why:* GOAL decision 6 and S3.
 - **D17.** Probes (calibration/probes.jsonl) retrained already-tried configurations with their seed to measure them on more sigma values, other T and longer training; they spent no configuration budget and selected nothing. They decided D14 (grid) and D15 (steps) only. *Why:* Measuring where a selected model breaks is not a new configuration; the probes are logged like trials.
 - **D18.** A non-finite loss or gradient stops training; the run keeps its best validation checkpoint (diverged_at_step in the manifest) and is FAILED only without one. *Why:* Calibration showed divergence at lr 2e-2 and with S = 2 at (32, 2); a late divergence after a good checkpoint is an optimiser event, not a missing result.
+- **D19.** Lambda floor: A2 and G2 hold only if Soliton-PHS reaches Acc >= 0.8 on task A at T = 16 and sigma_ref = 0.10 in at least 4 of 5 seeds. *Why:* Review r1 (Codex, P2) counterexample: Soliton at chance at sigma_ref for every T has slope 0 and would beat a Pure-PHS that decays from 0.99 at T = 16, giving CONFIRMED for a model that never recalls at the reference noise. Validity V checks sigma = 0 only. A tightening before the tag.
+- **D20.** Admission and source binding: analyze.py admits manifests only as stated under the flag 'admission' and counts V's gate only if tests passed, the PREREG check passed, the mutant runner exited 0 and every registered mutant of mutants.json was killed in that same gate. tools/confirm.py deletes any earlier mutant status before a gate, holds one lock across gate, run and rerun, checks in every worker, before phs/ is imported, that every tracked experiment file has the tag's bytes and nothing is untracked, and refuses existing manifests that analyze.py would not admit. *Why:* Review r1 (Codex, P1 x3, P2): a hash claim alone admitted manifests with foreign cells, n = 1 or another configuration; duplicates selected results by file-name order; a stale or partial mutant matrix could satisfy V; a worker could import a source mutated by a concurrent gate.
+- **D21.** Non-finite outputs: in evaluation a sequence with any non-finite logit counts as wrong and is counted in the cell's 'nonfinite'; loss, R_slip and erank average the finite sequences. A validation checkpoint with any non-finite output is not eligible for selection. *Why:* Review r1 (Codex, P2): an argmax over NaN logits returned an apparent chance accuracy (0.143) with NaN loss, which would enter sigma_crit and lambda as ordinary performance.
 
 ## Calibration
 
@@ -486,8 +491,15 @@ Verdict, first match wins:
 
 ## Review
 
-- PENDING
+- Round 1: Codex (codex-cli 0.164.0, read-only sandbox), blind prompt (what and where, no conclusions; runs/codex-prereg-prompt.txt kept in reviews/), on commit cbc355f. Verdict AMEND: 4 P1 + 3 P2. Full text: reviews/prereg-v1-codex-r1.md.
+- P1-1 room defined with 'and' in the flags and 'or' in D11 and analyze.py: the flags now say 'or' (D11).
+- P1-2 manifests admitted on a claimed PREREG hash alone; P1-4 duplicates selected by file-name order: admission (D20) with tests and mutants.
+- P1-3 a stale or partial mutant matrix could satisfy V: fresh, complete, exit-0 gate (D20) with tests and mutants.
+- P2-5 workers imported the live checkout: per-worker source identity against the tag and one lock (D20).
+- P2-6 lambda rewarded a flat slope at the chance floor: lambda floor (D19) with the reviewer's counterexample as a test and a mutant.
+- P2-7 non-finite outputs became chance-like accuracy: D21 with a test and a mutant.
+- The reviewer found no test-cell leakage in the 92 calibration jobs and 18 probes (all seed 100, calib digests).
 
 ## Frozen files
 
-- `analyze.py`: `1af3aad33302c07f240c91f330b38e1580cc9c6d1b3bf66abbbd1fd6d056fc46`
+- `analyze.py`: `abb6f33cc5a6f10eed9497e271ece1e91045b89d6c52efcf0eee0604ad1140bb`

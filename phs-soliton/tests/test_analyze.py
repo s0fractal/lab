@@ -19,9 +19,18 @@ PREREG = {
     "verdict_rule": {"verdict_models": ["pure", "soliton", "gru"], "acc_threshold": 0.8, "sigma_crit_below_grid": -0.05,
                      "sigma_ref": 0.10, "alpha": 0.05, "min_effect": {"sigma_crit_mean": 0.05, "lambda": 0.02},
                      "B_margin": 0.05, "V_acc": 0.95, "V_min_seeds": 4,
+                     "lambda_floor": {"T": 16, "acc": 0.8, "min_seeds": 4},
                      "room": {"pure_sigma_crit_max": 0.30, "pure_lambda_max": -0.02}},
+    "environment": {"python": "3.13.15", "torch": "2.14.1", "numpy": "2.5.3"},
+    "optimisation": {"steps": 10, "batch": 4},
+    "models": {"pure": {"config": {"lr": 0.01}}, "soliton": {"config": {"lr": 0.01}, "params": {"A": 7, "B": 5}},
+               "gru": {"config": {"lr": 0.007}}, "gru_pm": {"config": {"lr": 0.03}}},
+    "tasks": {"n_test": 4096, "digests": {f"{t}/{T}/{s:.2f}": f"d-{t}-{T}-{s:.2f}" for t in "AB" for T in TS
+                                          for s in SIGMAS}},
 }
-GATE = {"tests_ok": True, "mutants_killed": 13, "mutants_total": 13, "prereg_sha256": "x"}
+REGISTERED = 13
+GATE = {"tests_ok": True, "prereg_check_ok": True, "mutants_exit": 0, "mutants_killed": 13, "mutants_total": 13,
+        "prereg_sha256": "x", "tag_commit": "c0ffee"}
 
 
 def robust(T, s, seed, edge=0.25):
@@ -65,7 +74,20 @@ def manifests(a_fn: dict, b_fn: dict | None = None, drop=()):
 
 
 def verdict(ms, gate=GATE, prereg=PREREG):
-    return analyze.compute(prereg, "x", ms, gate)["verdict"]
+    return analyze.compute(prereg, "x", ms, gate, REGISTERED)["verdict"]
+
+
+def admissible(ms):
+    """The synthetic manifests with every field admission reads, under their own file names."""
+    out = []
+    for m in copy.deepcopy(ms):
+        m.update(prereg_sha256="x", tag_commit="c0ffee", cell_namespace="test",
+                 cfg=analyze.expected_config(PREREG, m["kind"], m["task"]),
+                 environment={"python": "3.13.15", "torch": "2.14.1", "numpy": "2.5.3"})
+        for key, c in m["cells"].items():
+            c.update(digest=f"d-{m['task']}-{m['T']}-{key}", n=4096)
+        out.append((analyze.run_name(m["kind"], m["task"], m["T"], m["seed"]) + ".json", m))
+    return out
 
 
 BASE = {"pure": fragile, "soliton": robust, "gru": fragile, "gru_pm": fragile}
@@ -116,7 +138,7 @@ class TestVerdicts(unittest.TestCase):
             if 0 < s <= 0.10 + 1e-9:
                 return 0.99 - 0.04 * (math.log2(T) - 4) - 0.001 * seed   # lambda +0.01 over fragile
             return fragile(T, s, seed)
-        out = analyze.compute(PREREG, "x", manifests(dict(BASE, soliton=slightly)), GATE)
+        out = analyze.compute(PREREG, "x", manifests(dict(BASE, soliton=slightly)), GATE, REGISTERED)
         self.assertTrue(out["hypotheses"]["A1"]["holm_reject"])
         self.assertEqual(out["verdict"], "REFUTED")
 
@@ -127,7 +149,7 @@ class TestVerdicts(unittest.TestCase):
     def test_room_on_one_metric_is_enough_to_refute(self):
         def steady(T, s, seed):   # Pure: no decay with T at any sigma (no room on lambda), breaks above 0.10
             return 0.99 - 0.001 * seed if s <= 0.10 + 1e-9 else 0.5
-        out = analyze.compute(PREREG, "x", manifests(dict(BASE, pure=steady, soliton=steady)), GATE)
+        out = analyze.compute(PREREG, "x", manifests(dict(BASE, pure=steady, soliton=steady)), GATE, REGISTERED)
         self.assertFalse(out["room"]["lambda"])
         self.assertTrue(out["room"]["sigma"])
         self.assertEqual(out["verdict"], "REFUTED")
@@ -145,14 +167,76 @@ class TestVerdicts(unittest.TestCase):
         self.assertEqual(verdict(manifests(BASE), gate=dict(GATE, mutants_killed=12)), "INCONCLUSIVE")
         self.assertEqual(verdict(manifests(BASE), gate=None), "INCONCLUSIVE")
 
+    def test_validity_needs_a_complete_fresh_gate(self):
+        ms = manifests(BASE)
+        self.assertEqual(verdict(ms, gate=dict(GATE, mutants_exit=1)), "INCONCLUSIVE")
+        self.assertEqual(verdict(ms, gate=dict(GATE, prereg_check_ok=False)), "INCONCLUSIVE")
+        self.assertEqual(verdict(ms, gate=dict(GATE, mutants_killed=1, mutants_total=1)), "INCONCLUSIVE")
+
+    def test_flat_slope_at_the_chance_floor_is_not_slower_decay(self):
+        def floor(T, s, seed):    # recalls at sigma <= 0.05 only, chance at the reference noise at every T
+            return 0.99 - 0.001 * seed if s <= 0.05 + 1e-9 else 1 / 7
+
+        def short(T, s, seed):    # recalls up to sigma 0.10 at T = 16 only
+            return 0.99 - 0.001 * seed if (T == 16 and s <= 0.10 + 1e-9) else 1 / 7
+        out = analyze.compute(PREREG, "x", manifests(dict(BASE, soliton=floor, pure=short, gru=short)), GATE,
+                              REGISTERED)
+        self.assertGreater(out["hypotheses"]["A2"]["delta"], 0.02)
+        self.assertFalse(out["hypotheses"]["A2"]["holds"])
+        self.assertNotEqual(out["verdict"], "CONFIRMED")
+
     def test_results_serialize_as_json(self):
         import json
-        out = analyze.compute(PREREG, "x", manifests(BASE), GATE)
+        out = analyze.compute(PREREG, "x", manifests(BASE), GATE, REGISTERED)
         self.assertEqual(json.loads(json.dumps(out))["verdict"], "CONFIRMED")
 
     def test_gru_pm_is_not_in_the_verdict(self):
         ms = manifests(dict(BASE, gru_pm=robust), drop={("gru_pm", "A", 16, 0)})
         self.assertEqual(verdict(ms), "CONFIRMED")
+
+
+class TestAdmission(unittest.TestCase):
+    def problems(self, named, gate=GATE):
+        return analyze.admit(PREREG, "x", named, gate)
+
+    def test_registered_runs_are_admitted(self):
+        self.assertEqual(self.problems(admissible(manifests(BASE))), [])
+
+    def test_duplicate_run_is_refused(self):
+        named = admissible(manifests(BASE))
+        self.assertTrue(any("duplicate" in p for p in self.problems(named + [named[0]])))
+
+    def test_unexpected_run_is_refused(self):
+        named = admissible(manifests(BASE))
+        extra = copy.deepcopy(named[0][1])
+        extra["seed"] = 9
+        self.assertTrue(self.problems(named + [(analyze.run_name(extra["kind"], extra["task"], extra["T"], 9) + ".json",
+                                                extra)]))
+
+    def test_calibration_cells_are_refused(self):
+        named = admissible(manifests(BASE))
+        named[3][1]["cell_namespace"] = "calib"
+        self.assertTrue(any("namespace" in p for p in self.problems(named)))
+
+    def test_foreign_cells_are_refused(self):
+        named = admissible(manifests(BASE))
+        named[5][1]["cells"]["0.10"]["digest"] = "other"
+        self.assertTrue(any("digest" in p for p in self.problems(named)))
+        named = admissible(manifests(BASE))
+        named[5][1]["cells"]["0.10"]["n"] = 1
+        self.assertTrue(any("n = 1" in p for p in self.problems(named)))
+
+    def test_other_configuration_is_refused(self):
+        named = admissible(manifests(BASE))
+        named[7][1]["cfg"] = dict(named[7][1]["cfg"], lr=0.5)
+        self.assertTrue(any("configuration" in p for p in self.problems(named)))
+
+    def test_mixed_tags_are_refused(self):
+        named = admissible(manifests(BASE))
+        named[2][1]["tag_commit"] = "deadbeef"
+        self.assertTrue(any("tag commits" in p for p in self.problems(named)))
+        self.assertTrue(any("gate" in p for p in self.problems(admissible(manifests(BASE)),
+                                                              dict(GATE, tag_commit="deadbeef"))))
 
 
 if __name__ == "__main__":

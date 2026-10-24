@@ -222,6 +222,87 @@
    "kills": [
     "tests.test_analyze.TestVerdicts.test_room_on_one_metric_is_enough_to_refute"
    ]
+  },
+  "analyze-lambda-floor-ignored": {
+   "claim": "A2 and G2 need the lambda floor (D19).",
+   "file": "analyze.py",
+   "find": "hyp[name][\"holds\"] = hyp[name][\"holds\"] and floor_ok",
+   "replace": "hyp[name][\"holds\"] = hyp[name][\"holds\"]",
+   "kills": [
+    "tests.test_analyze.TestVerdicts.test_flat_slope_at_the_chance_floor_is_not_slower_decay"
+   ]
+  },
+  "analyze-gate-exit-ignored": {
+   "claim": "V needs a mutant runner that exited 0 in this gate (D20).",
+   "file": "analyze.py",
+   "find": "and gate.get(\"mutants_exit\") == 0 and gate.get(\"prereg_sha256\") == prereg_sha",
+   "replace": "and gate.get(\"prereg_sha256\") == prereg_sha",
+   "kills": [
+    "tests.test_analyze.TestVerdicts.test_validity_needs_a_complete_fresh_gate"
+   ]
+  },
+  "analyze-gate-registered-ignored": {
+   "claim": "V needs every registered mutant, not a smaller matrix (D20).",
+   "file": "analyze.py",
+   "find": "gate.get(\"mutants_killed\") == gate.get(\"mutants_total\") == registered_mutants",
+   "replace": "gate.get(\"mutants_killed\") == gate.get(\"mutants_total\")",
+   "kills": [
+    "tests.test_analyze.TestVerdicts.test_validity_needs_a_complete_fresh_gate"
+   ]
+  },
+  "analyze-admit-duplicate": {
+   "claim": "Admission refuses a run twice (D20).",
+   "file": "analyze.py",
+   "find": "problems.append(f\"{fname}: duplicate of {seen[ident]}\")",
+   "replace": "pass",
+   "kills": [
+    "tests.test_analyze.TestAdmission.test_duplicate_run_is_refused"
+   ]
+  },
+  "analyze-admit-namespace": {
+   "claim": "Admission refuses calibration cells (D20).",
+   "file": "analyze.py",
+   "find": "if m.get(\"cell_namespace\") != \"test\":",
+   "replace": "if False:",
+   "kills": [
+    "tests.test_analyze.TestAdmission.test_calibration_cells_are_refused"
+   ]
+  },
+  "analyze-admit-digest": {
+   "claim": "Admission refuses cells whose digest differs from PREREG (D20).",
+   "file": "analyze.py",
+   "find": "if c.get(\"digest\") != prereg[\"tasks\"][\"digests\"].get(f\"{ident[1]}/{ident[2]}/{key}\"):",
+   "replace": "if False:",
+   "kills": [
+    "tests.test_analyze.TestAdmission.test_foreign_cells_are_refused"
+   ]
+  },
+  "analyze-admit-config": {
+   "claim": "Admission refuses another configuration (D20).",
+   "file": "analyze.py",
+   "find": "if m.get(\"cfg\") != expected_config(prereg, ident[0], ident[1]):",
+   "replace": "if False:",
+   "kills": [
+    "tests.test_analyze.TestAdmission.test_other_configuration_is_refused"
+   ]
+  },
+  "analyze-admit-tags": {
+   "claim": "Admission refuses manifests from several tag commits (D20).",
+   "file": "analyze.py",
+   "find": "if len(tags) > 1:",
+   "replace": "if False:",
+   "kills": [
+    "tests.test_analyze.TestAdmission.test_mixed_tags_are_refused"
+   ]
+  },
+  "train-nonfinite-as-hit": {
+   "claim": "A non-finite sequence counts as wrong, never as an argmax hit (D21).",
+   "file": "phs/train.py",
+   "find": "hit = (logits[:, -1].argmax(-1) == targets[sl][:, -1]) & finite",
+   "replace": "hit = (logits[:, -1].argmax(-1) == targets[sl][:, -1])",
+   "kills": [
+    "tests.test_train.TestNonFinite.test_nonfinite_sequences_count_as_wrong"
+   ]
   }
  }
 }

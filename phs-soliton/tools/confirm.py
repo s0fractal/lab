@@ -13,6 +13,7 @@ the old manifest to results/failures/ and records why.
 """
 from __future__ import annotations
 
+import fcntl
 import hashlib
 import json
 import multiprocessing as mp
@@ -67,6 +68,44 @@ def preconditions() -> dict:
             "commit": head}
 
 
+def source_problems(tag_commit: str) -> list:
+    """Every tracked experiment file (outside the output paths) must have the tag's bytes, and no untracked file may
+    sit beside them: what a worker is about to import is what the tag froze."""
+    top = Path(git("rev-parse", "--show-toplevel"))
+    rel = ROOT.relative_to(top).as_posix()
+    tagged = {}
+    for line in git("ls-tree", "-r", "--full-tree", tag_commit, "--", rel).splitlines():
+        meta, path = line.split("\t", 1)
+        if path[len(rel) + 1:].split("/")[0] in OUTPUTS:
+            continue
+        tagged[path] = meta.split()[2]
+    paths = sorted(tagged)
+    out = subprocess.run(["git", "hash-object", "--stdin-paths"], cwd=top, input="\n".join(paths), text=True,
+                         capture_output=True, check=True).stdout.split()
+    problems = [f"{p} differs from {tag_commit[:12]}" for p, h in zip(paths, out) if tagged[p] != h]
+    excludes = [f":(exclude){o}" for o in OUTPUTS]
+    untracked = git("status", "--porcelain", "--untracked-files=all", "--", ".", *excludes)
+    problems += [f"uncommitted: {line}" for line in untracked.splitlines()]
+    return problems
+
+
+class Lock:
+    """One gate, run or rerun at a time: a gate mutates sources while it runs."""
+
+    def __enter__(self):
+        RESULTS.mkdir(exist_ok=True)
+        self.f = open(RESULTS / ".confirm.lock", "w")
+        try:
+            fcntl.flock(self.f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            raise SystemExit("refused: another gate, run or rerun holds results/.confirm.lock")
+        return self
+
+    def __exit__(self, *exc):
+        fcntl.flock(self.f, fcntl.LOCK_UN)
+        self.f.close()
+
+
 def environment() -> dict:
     import numpy
     import torch
@@ -105,6 +144,9 @@ def grid(prereg: dict) -> list:
 
 def work(args):
     kind, task, T, seed, cfg, ctx = args
+    problems = source_problems(ctx["tag_commit"])   # before anything of phs/ is imported in this process
+    if problems:
+        return {"abort": problems}
     from phs.train import peak_rss_bytes, run, setup_determinism
     setup_determinism(1)
     t0 = time.time()
@@ -136,12 +178,19 @@ def context(pre: dict) -> dict:
 
 
 def cmd_gate() -> int:
+    with Lock():
+        return gate()
+
+
+def gate() -> int:
     pre = preconditions()
     t0 = time.time()
     tests = subprocess.run([sys.executable, "-m", "unittest", "discover", "-s", "tests", "-t", "."], cwd=ROOT,
                            capture_output=True, text=True)
     status_path = RESULTS / "mutants-status.json"
     RESULTS.mkdir(exist_ok=True)
+    status_path.unlink(missing_ok=True)   # never read a matrix this gate did not write
+    registered = len(json.loads((ROOT / "mutants.json").read_text())["mutants"])
     mut = subprocess.run([sys.executable, "tools/run_mutants.py", "--json", str(status_path)], cwd=ROOT,
                          capture_output=True, text=True)
     status = json.loads(status_path.read_text()) if status_path.exists() else {"killed": 0, "total": 0}
@@ -150,23 +199,44 @@ def cmd_gate() -> int:
             "prereg_sha256": pre["prereg_sha256"], "tests_ok": tests.returncode == 0,
             "tests_summary": (tests.stderr.strip().splitlines() or [""])[-3:],
             "mutants_killed": status["killed"], "mutants_total": status["total"],
-            "mutants_exit": mut.returncode, "prereg_check_ok": check.returncode == 0,
+            "mutants_registered": registered, "mutants_exit": mut.returncode, "prereg_check_ok": check.returncode == 0,
             "prereg_check": check.stdout.strip().splitlines()[-3:], "environment": environment(),
             "seconds": time.time() - t0}
     (RESULTS / "gate.json").write_text(json.dumps(gate, indent=1, sort_keys=True) + "\n")
     print(json.dumps({k: gate[k] for k in ("tests_ok", "mutants_killed", "mutants_total", "prereg_check_ok")}))
-    return 0 if gate["tests_ok"] and status["killed"] == status["total"] > 0 and gate["prereg_check_ok"] else 1
+    return 0 if gate_ok(gate, pre) else 1
+
+
+def gate_ok(gate: dict, pre: dict) -> bool:
+    return bool(gate.get("tests_ok") is True and gate.get("prereg_check_ok") is True and gate.get("mutants_exit") == 0
+                and gate.get("mutants_killed") == gate.get("mutants_total") == gate.get("mutants_registered") > 0
+                and gate.get("prereg_sha256") == pre["prereg_sha256"] and gate.get("tag_commit") == pre["tag_commit"])
+
+
+def admitted_gate(pre: dict) -> dict:
+    gate_path = RESULTS / "gate.json"
+    gate = json.loads(gate_path.read_text()) if gate_path.exists() else {}
+    if not gate_ok(gate, pre):
+        raise SystemExit("refused: no passing gate for this PREREG and tag; run `tools/confirm.py gate`")
+    problems = source_problems(pre["tag_commit"])
+    if problems:
+        raise SystemExit("refused: " + "; ".join(problems[:5]))
+    import analyze
+    named = [(p.name, json.loads(p.read_text())) for p in sorted(MANIFESTS.glob("*.json"))]
+    problems = analyze.admit(pre["prereg"], pre["prereg_sha256"], named, gate)
+    if problems:
+        raise SystemExit(f"refused: existing manifests are not admissible: {problems[:5]}")
+    return gate
 
 
 def cmd_run(workers: int) -> int:
+    with Lock():
+        return run_grid(workers)
+
+
+def run_grid(workers: int) -> int:
     pre = preconditions()
-    gate_path = RESULTS / "gate.json"
-    if not gate_path.exists() or json.loads(gate_path.read_text()).get("prereg_sha256") != pre["prereg_sha256"]:
-        raise SystemExit("refused: run `tools/confirm.py gate` first")
-    foreign = [p.name for p in sorted(MANIFESTS.glob("*.json"))
-               if json.loads(p.read_text()).get("prereg_sha256") != pre["prereg_sha256"]]
-    if foreign:
-        raise SystemExit(f"refused: {len(foreign)} manifests name another PREREG, e.g. {foreign[:3]}")
+    admitted_gate(pre)
     ctx = context(pre)
     todo = [j for j in grid(pre["prereg"]) if not (MANIFESTS / (name(*j) + ".json")).exists()]
     jobs = [(k, t, T, s, model_config(pre["prereg"], k, t), ctx) for k, t, T, s in todo]
@@ -174,6 +244,9 @@ def cmd_run(workers: int) -> int:
     t0 = time.time()
     with mp.get_context("spawn").Pool(workers, maxtasksperchild=1) as pool:
         for rec in pool.imap_unordered(work, jobs):
+            if "abort" in rec:
+                pool.terminate()
+                raise SystemExit("aborted: the source changed under the runner: " + "; ".join(rec["abort"][:5]))
             path = write_manifest(rec)
             a = rec.get("cells", {}).get("0.00", {}).get("acc")
             print(f"[{time.time() - t0:7.0f}s] {path.name}: {rec['status']} acc(sigma 0) {a} "
@@ -185,7 +258,13 @@ def cmd_run(workers: int) -> int:
 def cmd_rerun(kind: str, task: str, T: int, seed: int, reason: str) -> int:
     if not reason.strip():
         raise SystemExit("refused: a rerun needs a reason")
+    with Lock():
+        return rerun(kind, task, T, seed, reason)
+
+
+def rerun(kind: str, task: str, T: int, seed: int, reason: str) -> int:
     pre = preconditions()
+    admitted_gate(pre)
     path = MANIFESTS / (name(kind, task, T, seed) + ".json")
     previous = None
     if path.exists():
@@ -200,6 +279,8 @@ def cmd_rerun(kind: str, task: str, T: int, seed: int, reason: str) -> int:
     ctx["extra"] = {"rerun_reason": reason,
                     "previous_manifest": str(previous.relative_to(ROOT)) if previous else None}
     rec = work((kind, task, T, seed, model_config(pre["prereg"], kind, task), ctx))
+    if "abort" in rec:
+        raise SystemExit("aborted: " + "; ".join(rec["abort"][:5]))
     print(write_manifest(rec).name, rec["status"])
     return 0
 

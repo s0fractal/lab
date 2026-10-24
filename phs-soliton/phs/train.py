@@ -63,22 +63,30 @@ def slips(task: str, q: torch.Tensor) -> torch.Tensor:
 
 @torch.no_grad()
 def evaluate(model, task: str, b: dict, seed: int, chunk: int = 1024) -> dict:
+    """Accuracy over every sequence; a sequence with any non-finite logit counts as wrong (never as a lucky argmax)
+    and is counted in `nonfinite`; loss, R_slip and erank average the finite sequences (loss inf if none)."""
     model.eval()
     x, targets, sigma = to_torch(b)
     gen = torch.Generator().manual_seed(seed)
-    hits, losses, slip, ranks = [], [], [], []
+    hits, losses, slip, ranks, nonfinite, finite_n = [], [], [], [], 0, 0
     for i in range(0, x.shape[0], chunk):
         sl = slice(i, i + chunk)
         logits, diag = model(x[sl], sigma[sl], generator=gen, diagnostics=True)
-        loss, hit = loss_and_hits(task, logits, targets[sl])
+        finite = torch.isfinite(logits).flatten(1).all(1)
+        hit = (logits[:, -1].argmax(-1) == targets[sl][:, -1]) & finite
         hits.append(hit)
-        losses.append(float(loss) * hit.shape[0])
+        nonfinite += int((~finite).sum())
+        if finite.any():
+            loss, _ = loss_and_hits(task, logits[finite], targets[sl][finite])
+            losses.append(float(loss) * int(finite.sum()))
+            finite_n += int(finite.sum())
         if model.family == "phs":
-            slip.append(slips(task, diag["q_top"]))
-            ranks.append(erank(diag["theta_T"]))
+            slip.append(slips(task, diag["q_top"])[finite])
+            ranks.append(erank(diag["theta_T"])[finite])
     n = x.shape[0]
-    out = {"acc": float(torch.cat(hits).double().mean()), "loss": sum(losses) / n, "n": n}
-    if slip:
+    out = {"acc": float(torch.cat(hits).double().mean()), "loss": sum(losses) / finite_n if finite_n else math.inf,
+           "n": n, "nonfinite": nonfinite}
+    if slip and finite_n:
         out["r_slip"] = float(torch.cat(slip).mean())
         out["erank"] = float(torch.cat(ranks).mean())
     model.train()
@@ -149,8 +157,9 @@ def run(kind: str, task: str, T: int, seed: int, cfg: dict, sigmas=tasks.SIGMA_G
             record["curve"].append([step, float(loss.detach()), float(hits.double().mean())])
         if step % cfg["eval_every"] == 0 or step == cfg["steps"]:
             v = evaluate(model, task, val, tasks.derive_seed("valnoise", task, T, seed))
-            record["val"].append([step, v["acc"], v["loss"]])
-            if (v["acc"], -v["loss"]) > (best[0], -best[1]):
+            record["val"].append([step, v["acc"], v["loss"], v["nonfinite"]])
+            # a checkpoint with any non-finite validation output is not eligible
+            if v["nonfinite"] == 0 and (v["acc"], -v["loss"]) > (best[0], -best[1]):
                 best = (v["acc"], v["loss"], step, copy.deepcopy(model.state_dict()))
             if progress:
                 progress(f"{kind} {task} T={T} seed={seed} step {step}: loss {float(loss.detach()):.4f} "
