@@ -18,3 +18,4 @@ jobs:
       - run: make starter
       - run: make test
       - run: make mutants
+      - run: make prereg-check
