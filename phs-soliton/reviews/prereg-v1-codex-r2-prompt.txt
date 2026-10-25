@@ -1,0 +1,5 @@
+Scoped round 2 of a pre-registration review. Repository: /Users/s0fractal/Projects/.worktrees/lab-phs, directory phs-soliton/, commit 8d70cfd (git rev-parse HEAD to confirm).
+
+Round 1 found seven defects on commit cbc355f; its text is reviews/prereg-v1-codex-r1.md. For each of the seven, decide whether it is closed at the current commit, and whether the change that closes it introduces a new defect in the same code (analyze.py, tools/confirm.py, phs/train.py, prereg.json, tests/, mutants.json). Review nothing else.
+
+Read-only: do not modify any file. For each finding answer CLOSED or OPEN; for OPEN or for a new defect give file:line and a concrete counterexample, with severity P1 (blocks freezing) or P2. End with one line: ACCEPT or AMEND.

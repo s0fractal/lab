@@ -1,0 +1,34 @@
+{
+ "commit": "ebaec28b2c62a1c436d196aab598f4b99bf3325f",
+ "environment": {
+  "cores": 14,
+  "cpu": "Apple M4 Pro",
+  "deterministic": true,
+  "device": "cpu",
+  "dtype": "float32",
+  "machine": "arm64",
+  "numpy": "2.5.3",
+  "platform": "macOS-27.0.1-arm64-arm-64bit-Mach-O",
+  "python": "3.13.15",
+  "threads_per_run": 1,
+  "torch": "2.14.1"
+ },
+ "mutants_exit": 0,
+ "mutants_killed": 35,
+ "mutants_registered": 35,
+ "mutants_total": 35,
+ "prereg_check": [
+  "prereg: ok"
+ ],
+ "prereg_check_ok": true,
+ "prereg_sha256": "8cdffc90c408d047d142684a49ea1ad42bd800dd333f40c6959106bac4910a7d",
+ "seconds": 122.95937514305115,
+ "tag": "prereg-v1",
+ "tag_commit": "ebaec28b2c62a1c436d196aab598f4b99bf3325f",
+ "tests_ok": true,
+ "tests_summary": [
+  "Ran 44 tests in 4.431s",
+  "",
+  "OK"
+ ]
+}

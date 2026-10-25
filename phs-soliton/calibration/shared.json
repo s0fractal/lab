@@ -1,0 +1,8 @@
+{
+ "about": "Shared settings of S3, fixed before the first trial. Every model trains with the same optimisation settings; lr and the physical settings are per-model overrides, at most 12 configurations per model.",
+ "T": 32,
+ "seed": 100,
+ "n_cells": 1024,
+ "optimisation": {"steps": 4000, "batch": 64, "lr": 0.003, "weight_decay": 0.01, "clip": 1.0, "eval_every": 100, "n_val": 1024},
+ "model_defaults": {"N": 16, "d": 4, "dt": 1.0, "S": 4, "gamma": 0.5, "u_max": 2.0, "m_pin": 2, "kappa0": 1.0, "g_lat0": 1.0, "g_pin0": 0.5, "j_scale": 0.1}
+}

@@ -1,0 +1,14 @@
+{
+ "round": 4,
+ "about": "Round 4, after round 3: around (32, 2) neither a stronger port nor weaker damping helped either PHS model; s07 stays the only PHS configuration that learns task B. Both PHS models get the same last two probes around (32, 2): a lower lr and two sub-steps instead of four (half the cost). Control-GRU stops at 10 configurations (lr is its only setting and is settled at 7e-3). Control-GRU-pm learned task B but not task A at every lr up to 2e-2, so its next probes go higher, plus one lower. From this round on a diverged run keeps its best validation checkpoint (diverged_at_step) instead of being FAILED.",
+ "trials": [
+  {"id": "p11", "kind": "pure", "cfg": {"lr": 0.007, "N": 32, "d": 2}, "rationale": "(32, 2), lower lr"},
+  {"id": "p12", "kind": "pure", "cfg": {"lr": 0.01, "N": 32, "d": 2, "S": 2}, "rationale": "(32, 2), lr 1e-2, two sub-steps"},
+  {"id": "s11", "kind": "soliton", "cfg": {"lr": 0.007, "N": 32, "d": 2}, "rationale": "(32, 2), lower lr"},
+  {"id": "s12", "kind": "soliton", "cfg": {"lr": 0.01, "N": 32, "d": 2, "S": 2}, "rationale": "(32, 2), lr 1e-2, two sub-steps"},
+  {"id": "q07", "kind": "gru_pm", "cfg": {"N": 32, "d": 2, "lr": 0.03}, "rationale": "lr above the grid so far (task A unlearned up to 2e-2)"},
+  {"id": "q08", "kind": "gru_pm", "cfg": {"N": 32, "d": 2, "lr": 0.05}, "rationale": "higher lr"},
+  {"id": "q09", "kind": "gru_pm", "cfg": {"N": 32, "d": 2, "lr": 0.1}, "rationale": "higher lr"},
+  {"id": "q10", "kind": "gru_pm", "cfg": {"N": 32, "d": 2, "lr": 0.001}, "rationale": "lr below the grid so far"}
+ ]
+}

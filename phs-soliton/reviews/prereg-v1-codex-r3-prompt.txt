@@ -1,0 +1,5 @@
+Scoped round 3 of a pre-registration review. Repository: /Users/s0fractal/Projects/.worktrees/lab-phs, directory phs-soliton/, commit c97f738d06e8e84bac0fbb30e9fe90b12e125938 (git rev-parse HEAD to confirm).
+
+Round 2 (reviews/prereg-v1-codex-r2.md) left four items: finding 2 (tag correspondence), finding 5 (check-then-import window in workers), finding 7 (infinite validation loss eligible) and the new defect (a cell without finite sequences crashes aggregation). For each of these four, decide whether it is closed at the current commit, and whether the change that closes it introduces a new defect in the same code (analyze.py, tools/confirm.py, phs/train.py, tests/, mutants.json, prereg.json decisions D20-D21). Review nothing else.
+
+Read-only: do not modify any file. For each item answer CLOSED or OPEN; for OPEN or a new defect give file:line and a concrete counterexample, with severity P1 (blocks freezing) or P2. End with one line: ACCEPT or AMEND.

@@ -63,26 +63,39 @@ def slips(task: str, q: torch.Tensor) -> torch.Tensor:
 
 @torch.no_grad()
 def evaluate(model, task: str, b: dict, seed: int, chunk: int = 1024) -> dict:
+    """Accuracy over every sequence; a sequence with any non-finite logit counts as wrong (never as a lucky argmax)
+    and is counted in `nonfinite`; loss, R_slip and erank average the finite sequences (loss inf if none)."""
     model.eval()
     x, targets, sigma = to_torch(b)
     gen = torch.Generator().manual_seed(seed)
-    hits, losses, slip, ranks = [], [], [], []
+    hits, losses, slip, ranks, nonfinite, finite_n = [], [], [], [], 0, 0
     for i in range(0, x.shape[0], chunk):
         sl = slice(i, i + chunk)
         logits, diag = model(x[sl], sigma[sl], generator=gen, diagnostics=True)
-        loss, hit = loss_and_hits(task, logits, targets[sl])
+        finite = torch.isfinite(logits).flatten(1).all(1)
+        hit = (logits[:, -1].argmax(-1) == targets[sl][:, -1]) & finite
         hits.append(hit)
-        losses.append(float(loss) * hit.shape[0])
+        nonfinite += int((~finite).sum())
+        if finite.any():
+            loss, _ = loss_and_hits(task, logits[finite], targets[sl][finite])
+            losses.append(float(loss) * int(finite.sum()))
+            finite_n += int(finite.sum())
         if model.family == "phs":
-            slip.append(slips(task, diag["q_top"]))
-            ranks.append(erank(diag["theta_T"]))
+            slip.append(slips(task, diag["q_top"])[finite])
+            ranks.append(erank(diag["theta_T"])[finite])
     n = x.shape[0]
-    out = {"acc": float(torch.cat(hits).double().mean()), "loss": sum(losses) / n, "n": n}
-    if slip:
-        out["r_slip"] = float(torch.cat(slip).mean())
-        out["erank"] = float(torch.cat(ranks).mean())
+    out = {"acc": float(torch.cat(hits).double().mean()), "loss": sum(losses) / finite_n if finite_n else math.inf,
+           "n": n, "nonfinite": nonfinite}
+    if model.family == "phs":   # None where no sequence of the cell is finite
+        out["r_slip"] = float(torch.cat(slip).mean()) if finite_n else None
+        out["erank"] = float(torch.cat(ranks).mean()) if finite_n else None
     model.train()
     return out
+
+
+def eligible(v: dict) -> bool:
+    """A validation checkpoint counts only with every output finite and a finite loss."""
+    return v["nonfinite"] == 0 and math.isfinite(v["loss"])
 
 
 def flops_per_token(kind: str, cfg: dict, vocab: int, classes: int, hidden: int | None = None) -> int:
@@ -113,10 +126,10 @@ def step_cost_ms(model, task: str, T: int, batch: int = 64, reps: int = 3) -> fl
 
 
 def run(kind: str, task: str, T: int, seed: int, cfg: dict, sigmas=tasks.SIGMA_GRID, n_test: int = 4096,
-        test_cells: bool = True, log_every: int = 50, progress=None) -> dict:
+        test_cells: bool = True, namespace: str = "test", log_every: int = 50, progress=None) -> dict:
     """Train one model and evaluate it. cfg holds the model settings (N, d, dt, S, gamma, u_max, m_pin, ...) and
-    the shared optimisation settings SHARED_KEYS. Returns a JSON-able record; a non-finite loss stops the run with
-    status FAILED and its reason."""
+    the shared optimisation settings SHARED_KEYS. Returns a JSON-able record. A non-finite loss or gradient stops
+    training (diverged_at_step); the run keeps its best validation checkpoint and is FAILED only if it has none."""
     t_start = time.perf_counter()
     spec = tasks.TASKS[task]
     init_gen = torch.Generator().manual_seed(tasks.derive_seed("init", kind, task, T, seed))
@@ -135,25 +148,25 @@ def run(kind: str, task: str, T: int, seed: int, cfg: dict, sigmas=tasks.SIGMA_G
         x, targets, sigma = to_torch(tasks.batch(task, stream, cfg["batch"], T))
         logits = model(x, sigma, generator=noise_gen)
         loss, hits = loss_and_hits(task, logits, targets)
-        if not torch.isfinite(loss):
-            record.update(status="FAILED", reason=f"non-finite training loss at step {step}")
+        if not torch.isfinite(loss):   # stop; the run keeps its best validation checkpoint so far
+            record.update(diverged_at_step=step, reason=f"non-finite training loss at step {step}")
             break
         opt.zero_grad(set_to_none=True)
         loss.backward()
         gnorm = torch.nn.utils.clip_grad_norm_(model.parameters(), cfg["clip"])
         if not torch.isfinite(gnorm):
-            record.update(status="FAILED", reason=f"non-finite gradient norm at step {step}")
+            record.update(diverged_at_step=step, reason=f"non-finite gradient norm at step {step}")
             break
         opt.step()
         if step % log_every == 0:
-            record["curve"].append([step, float(loss), float(hits.double().mean())])
+            record["curve"].append([step, float(loss.detach()), float(hits.double().mean())])
         if step % cfg["eval_every"] == 0 or step == cfg["steps"]:
             v = evaluate(model, task, val, tasks.derive_seed("valnoise", task, T, seed))
-            record["val"].append([step, v["acc"], v["loss"]])
-            if (v["acc"], -v["loss"]) > (best[0], -best[1]):
+            record["val"].append([step, v["acc"], v["loss"], v["nonfinite"]])
+            if eligible(v) and (v["acc"], -v["loss"]) > (best[0], -best[1]):
                 best = (v["acc"], v["loss"], step, copy.deepcopy(model.state_dict()))
             if progress:
-                progress(f"{kind} {task} T={T} seed={seed} step {step}: loss {float(loss):.4f} "
+                progress(f"{kind} {task} T={T} seed={seed} step {step}: loss {float(loss.detach()):.4f} "
                          f"val acc {v['acc']:.4f} ({time.perf_counter() - t_start:.0f}s)")
     record["train_seconds"] = time.perf_counter() - t_start
     if best[3] is None:
@@ -169,11 +182,12 @@ def run(kind: str, task: str, T: int, seed: int, cfg: dict, sigmas=tasks.SIGMA_G
     if test_cells:
         cells = {}
         for s in sigmas:
-            b = tasks.test_set(task, T, s, n=n_test)
-            ev = evaluate(model, task, b, tasks.derive_seed("evalnoise", task, T, f"{s:.2f}", seed))
+            b = tasks.test_set(task, T, s, n=n_test, namespace=namespace)
+            ev = evaluate(model, task, b, tasks.derive_seed(namespace + "noise", task, T, f"{s:.2f}", seed))
             ev["digest"] = tasks.digest(b)
             cells[f"{s:.2f}"] = ev
         record["cells"] = cells
+        record["cell_namespace"] = namespace
         record["c_step_ms"] = step_cost_ms(model, task, T)
         record["flops_per_token"] = flops_per_token(kind, cfg, spec["vocab"], spec["classes"],
                                                     getattr(model, "hidden", None))

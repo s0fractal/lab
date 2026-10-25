@@ -1,0 +1,18 @@
+{
+ "round": 1,
+ "about": "Round 1: the same four probes for both PHS models (defaults, a higher lr, the other (N, d), weaker damping with a stronger port); a log grid of lr for Control-GRU. Control-GRU-pm waits until Soliton-PHS has chosen (N, d), which sets its matched parameter count.",
+ "trials": [
+  {"id": "p01", "kind": "pure", "cfg": {}, "rationale": "defaults: N,d = 16,4; dt 1, S 4; gamma 0.5; u_max 2; lr 3e-3"},
+  {"id": "p02", "kind": "pure", "cfg": {"lr": 0.01}, "rationale": "higher lr"},
+  {"id": "p03", "kind": "pure", "cfg": {"N": 32, "d": 2}, "rationale": "the other (N, d) of the goal"},
+  {"id": "p04", "kind": "pure", "cfg": {"gamma": 0.1, "u_max": 4.0}, "rationale": "weaker damping (longer traces), stronger port"},
+  {"id": "s01", "kind": "soliton", "cfg": {}, "rationale": "defaults: N,d = 16,4; dt 1, S 4; gamma 0.5; u_max 2; m 2; lr 3e-3"},
+  {"id": "s02", "kind": "soliton", "cfg": {"lr": 0.01}, "rationale": "higher lr"},
+  {"id": "s03", "kind": "soliton", "cfg": {"N": 32, "d": 2}, "rationale": "the other (N, d) of the goal"},
+  {"id": "s04", "kind": "soliton", "cfg": {"gamma": 0.1, "u_max": 4.0}, "rationale": "weaker damping, stronger port"},
+  {"id": "g01", "kind": "gru", "cfg": {"lr": 0.001}, "rationale": "lr log grid"},
+  {"id": "g02", "kind": "gru", "cfg": {"lr": 0.003}, "rationale": "lr log grid"},
+  {"id": "g03", "kind": "gru", "cfg": {"lr": 0.01}, "rationale": "lr log grid"},
+  {"id": "g04", "kind": "gru", "cfg": {"lr": 0.03}, "rationale": "lr log grid"}
+ ]
+}

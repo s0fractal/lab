@@ -1,0 +1,421 @@
+{
+ "killed": 35,
+ "total": 35,
+ "mutants": {
+  "gyro-explicit": {
+   "killed": true,
+   "claim": "Tests (1) and (2) see the PDF's explicit gyroscopic kick: second order at a fixed horizon, a bounded long run, and the Gibbs variance all fail under it.",
+   "tests": [
+    {
+     "test": "tests.test_core.Test1EnergyOrderAtFixedHorizon.test_order_at_fixed_horizon",
+     "outcome": "kill",
+     "message": "1.6482192279408332 not greater than or equal to 1.8 : max |H_t - H_0| over t <= 20.0: [np.float64(20.874495318312352), np.float64(6.659667665848598), np.float64(2.6014324178590016)], orders [1.6482192279408332, 1.3561439566963687]"
+    },
+    {
+     "test": "tests.test_core.Test1EnergyOrderAtFixedHorizon.test_bounded_long_run",
+     "outcome": "kill",
+     "message": "np.float64(6.278878261023923e+20) not less than np.float64(433.05002335283393) : 10^4 steps of 0.04: first tenth 1.444e+02, whole 6.279e+20"
+    },
+    {
+     "test": "tests.test_core.Test2Gibbs.test_variance_matches_tau0_mass",
+     "outcome": "kill",
+     "message": "np.float64(0.05406428153881415) not less than 0.02 : node 0 (m = 0.5): relative variance bias +0.0541; all [0.05406428 0.08951741 0.00814599 0.05727018]"
+    }
+   ]
+  },
+  "ou-no-sqrt-mass": {
+   "killed": true,
+   "claim": "Test (2) sees an O-step noise not scaled by M^1/2 (Cov(P) = tau0 I instead of tau0 M).",
+   "tests": [
+    {
+     "test": "tests.test_core.Test2Gibbs.test_variance_matches_tau0_mass",
+     "outcome": "kill",
+     "message": "np.float64(0.604610297526923) not less than 0.02 : node 0 (m = 0.5): relative variance bias +0.6046; all [ 0.6046103  -0.13825695 -0.38504837 -0.15938976]"
+    }
+   ]
+  },
+  "q-wrap-identity": {
+   "killed": true,
+   "claim": "Test (3) sees Q_top computed without wrap (the telescoping sum is identically 0).",
+   "tests": [
+    {
+     "test": "tests.test_core.Test3Charge.test_figure2_ring",
+     "outcome": "kill",
+     "message": "0.0 != 1.0 within 5 places (1.0 difference)"
+    },
+    {
+     "test": "tests.test_core.Test3Charge.test_antipodal_half_open",
+     "outcome": "kill",
+     "message": "0.0 != -1.0 within 5 places (1.0 difference) : bonds of exactly +-pi wrap into [-pi, pi): Q = -1"
+    }
+   ]
+  },
+  "q-denominator": {
+   "killed": true,
+   "claim": "Test (3)'s integrality bound sees a charge not divided by exactly 2 pi.",
+   "tests": [
+    {
+     "test": "tests.test_core.Test3Charge.test_integer_on_random_float32",
+     "outcome": "kill",
+     "message": "0.0025358200073242188 not less than or equal to 7.62939453125e-06 : max |Q - round Q| = 2.536e-03"
+    }
+   ]
+  },
+  "wrap-closed-right": {
+   "killed": true,
+   "claim": "Test (3) pins the half-open convention [-pi, pi): wrapping into (-pi, pi] flips the antipodal charge.",
+   "tests": [
+    {
+     "test": "tests.test_core.Test3Charge.test_antipodal_half_open",
+     "outcome": "kill",
+     "message": "1.0 != -1.0 within 5 places (2.0 difference) : bonds of exactly +-pi wrap into [-pi, pi): Q = -1"
+    }
+   ]
+  },
+  "att-no-symmetrization": {
+   "killed": true,
+   "claim": "Test (4) sees the attention force without the symmetrized kernel (A_ij + A_ji)/2.",
+   "tests": [
+    {
+     "test": "tests.test_core.Test4Forces.test_attention",
+     "outcome": "kill",
+     "message": "0.02876422387349431 not less than 1e-08 : max |F + grad V| = 2.876e-02"
+    },
+    {
+     "test": "tests.test_core.Test4Forces.test_total",
+     "outcome": "kill",
+     "message": "0.028764223873494643 not less than 1e-08 : max |F + grad V| = 2.876e-02"
+    }
+   ]
+  },
+  "lattice-sign": {
+   "killed": true,
+   "claim": "Test (4) sees the lattice force with its sign reversed.",
+   "tests": [
+    {
+     "test": "tests.test_core.Test4Forces.test_lattice",
+     "outcome": "kill",
+     "message": "3.579542261837744 not less than 1e-08 : max |F + grad V| = 3.580e+00"
+    },
+    {
+     "test": "tests.test_core.Test4Forces.test_total",
+     "outcome": "kill",
+     "message": "3.5795422618377435 not less than 1e-08 : max |F + grad V| = 3.580e+00"
+    }
+   ]
+  },
+  "pin-sign": {
+   "killed": true,
+   "claim": "Test (4) sees the pinning force with its sign reversed.",
+   "tests": [
+    {
+     "test": "tests.test_core.Test4Forces.test_lattice",
+     "outcome": "kill",
+     "message": "2.3998313926041996 not less than 1e-08 : max |F + grad V| = 2.400e+00"
+    }
+   ]
+  },
+  "drive-sign": {
+   "killed": true,
+   "claim": "Test (4) sees the input-port force with its sign reversed.",
+   "tests": [
+    {
+     "test": "tests.test_core.Test4Forces.test_drive",
+     "outcome": "kill",
+     "message": "1.9283810031175552 not less than 1e-08 : max |F + grad V| = 1.928e+00"
+    }
+   ]
+  },
+  "bptt-detach-theta": {
+   "killed": true,
+   "claim": "Test (5) sees a gradient cut through the force evaluation (forward unchanged, BPTT truncated).",
+   "tests": [
+    {
+     "test": "tests.test_core.Test5BPTT.test_gradient_matches_finite_differences",
+     "outcome": "kill",
+     "message": "9.673356007137821 not less than 1e-05 : worst relative gap between autograd and finite differences 9.673e+00"
+    }
+   ]
+  },
+  "task-b-inversion": {
+   "killed": true,
+   "claim": "The automaton reference sees a wrong inversion rule.",
+   "tests": [
+    {
+     "test": "tests.test_tasks.TestTaskB.test_matches_reference",
+     "outcome": "kill",
+     "message": "np.int64(3) != np.int64(2)"
+    }
+   ]
+  },
+  "task-a-marker-once": {
+   "killed": true,
+   "claim": "Task A's structure test sees the marker shown only once.",
+   "tests": [
+    {
+     "test": "tests.test_tasks.TestTaskA.test_structure",
+     "outcome": "kill",
+     "message": "np.False_ is not true : the marker is shown at t = 0 and t = 1"
+    }
+   ]
+  },
+  "task-a-pdist": {
+   "killed": true,
+   "claim": "Task A's structure test sees a distractor rate other than p_dist = 0.25.",
+   "tests": [
+    {
+     "test": "tests.test_tasks.TestTaskA.test_structure",
+     "outcome": "kill",
+     "message": "0.050298275862068975 not less than 0.005 : distractor rate 0.3003"
+    }
+   ]
+  },
+  "analyze-sigma-crit-no-break": {
+   "killed": true,
+   "claim": "sigma_crit counts only the unbroken run of cells above the threshold from sigma = 0.",
+   "tests": [
+    {
+     "test": "tests.test_analyze.TestPrimitives.test_sigma_crit_stops_at_the_first_failure",
+     "outcome": "kill",
+     "message": "0.35 != 0.05"
+    }
+   ]
+  },
+  "analyze-perm-strict": {
+   "killed": true,
+   "claim": "The exact permutation p-value counts the observed split itself (min p = 1/252).",
+   "tests": [
+    {
+     "test": "tests.test_analyze.TestPrimitives.test_exact_permutation",
+     "outcome": "kill",
+     "message": "0.0 != 0.003968253968253968 within 7 places (0.003968253968253968 difference)"
+    }
+   ]
+  },
+  "analyze-holm-plain-alpha": {
+   "killed": true,
+   "claim": "Holm's first step tests the smallest p at alpha / 2.",
+   "tests": [
+    {
+     "test": "tests.test_analyze.TestPrimitives.test_holm_step_down",
+     "outcome": "kill",
+     "message": "{'a': True, 'b': True} != {'a': False, 'b': False}"
+    }
+   ]
+  },
+  "analyze-min-effect-ignored": {
+   "killed": true,
+   "claim": "A significant difference below the minimum effect does not count as support.",
+   "tests": [
+    {
+     "test": "tests.test_analyze.TestVerdicts.test_significant_but_below_minimum_effect_is_not_confirmation",
+     "outcome": "kill",
+     "message": "'CONFIRMED' != 'REFUTED'"
+    }
+   ]
+  },
+  "analyze-room-ignored": {
+   "killed": true,
+   "claim": "REFUTED needs room: a Pure-PHS at the ceiling gives INCONCLUSIVE.",
+   "tests": [
+    {
+     "test": "tests.test_analyze.TestVerdicts.test_ceiling_is_inconclusive_not_refuted",
+     "outcome": "kill",
+     "message": "'REFUTED' != 'INCONCLUSIVE'"
+    }
+   ]
+  },
+  "analyze-B-margin-sign": {
+   "killed": true,
+   "claim": "B is non-inferiority with margin 0.05, not superiority by 0.05.",
+   "tests": [
+    {
+     "test": "tests.test_analyze.TestVerdicts.test_confirmed",
+     "outcome": "kill",
+     "message": "'TRADEOFF' != 'CONFIRMED'"
+    }
+   ]
+  },
+  "analyze-V-ignored": {
+   "killed": true,
+   "claim": "Without validity V the verdict is INCONCLUSIVE.",
+   "tests": [
+    {
+     "test": "tests.test_analyze.TestVerdicts.test_validity_needs_learning_at_T16",
+     "outcome": "kill",
+     "message": "'CONFIRMED' != 'INCONCLUSIVE'"
+    },
+    {
+     "test": "tests.test_analyze.TestVerdicts.test_validity_needs_the_gate",
+     "outcome": "kill",
+     "message": "'CONFIRMED' != 'INCONCLUSIVE'"
+    }
+   ]
+  },
+  "analyze-gate-partial": {
+   "killed": true,
+   "claim": "V needs every mutant killed, not most.",
+   "tests": [
+    {
+     "test": "tests.test_analyze.TestVerdicts.test_validity_needs_the_gate",
+     "outcome": "kill",
+     "message": "'CONFIRMED' != 'INCONCLUSIVE'"
+    }
+   ]
+  },
+  "analyze-incomplete-ignored": {
+   "killed": true,
+   "claim": "A missing or FAILED run of a verdict model makes the verdict INCONCLUSIVE.",
+   "tests": [
+    {
+     "test": "tests.test_analyze.TestVerdicts.test_missing_verdict_run_is_inconclusive",
+     "outcome": "kill",
+     "message": "'CONFIRMED_VS_PURE_ONLY' != 'INCONCLUSIVE'"
+    }
+   ]
+  },
+  "analyze-lambda-at-sigma0": {
+   "killed": true,
+   "claim": "lambda is the slope at sigma_ref = 0.10, not at sigma = 0.",
+   "tests": [
+    {
+     "test": "tests.test_analyze.TestVerdicts.test_confirmed",
+     "outcome": "kill",
+     "message": "'INCONCLUSIVE' != 'CONFIRMED'"
+    }
+   ]
+  },
+  "analyze-room-both": {
+   "killed": true,
+   "claim": "Room on one metric is enough for REFUTED (the hypothesis is a conjunction).",
+   "tests": [
+    {
+     "test": "tests.test_analyze.TestVerdicts.test_room_on_one_metric_is_enough_to_refute",
+     "outcome": "kill",
+     "message": "'INCONCLUSIVE' != 'REFUTED'"
+    }
+   ]
+  },
+  "analyze-lambda-floor-ignored": {
+   "killed": true,
+   "claim": "A2 and G2 need the lambda floor (D19).",
+   "tests": [
+    {
+     "test": "tests.test_analyze.TestVerdicts.test_flat_slope_at_the_chance_floor_is_not_slower_decay",
+     "outcome": "kill",
+     "message": "True is not false"
+    }
+   ]
+  },
+  "analyze-gate-exit-ignored": {
+   "killed": true,
+   "claim": "V needs a mutant runner that exited 0 in this gate (D20).",
+   "tests": [
+    {
+     "test": "tests.test_analyze.TestVerdicts.test_validity_needs_a_complete_fresh_gate",
+     "outcome": "kill",
+     "message": "'CONFIRMED' != 'INCONCLUSIVE'"
+    }
+   ]
+  },
+  "analyze-gate-registered-ignored": {
+   "killed": true,
+   "claim": "V needs every registered mutant, not a smaller matrix (D20).",
+   "tests": [
+    {
+     "test": "tests.test_analyze.TestVerdicts.test_validity_needs_a_complete_fresh_gate",
+     "outcome": "kill",
+     "message": "'CONFIRMED' != 'INCONCLUSIVE'"
+    }
+   ]
+  },
+  "analyze-admit-duplicate": {
+   "killed": true,
+   "claim": "Admission refuses a run twice (D20).",
+   "tests": [
+    {
+     "test": "tests.test_analyze.TestAdmission.test_duplicate_run_is_refused",
+     "outcome": "kill",
+     "message": "False is not true"
+    }
+   ]
+  },
+  "analyze-admit-namespace": {
+   "killed": true,
+   "claim": "Admission refuses calibration cells (D20).",
+   "tests": [
+    {
+     "test": "tests.test_analyze.TestAdmission.test_calibration_cells_are_refused",
+     "outcome": "kill",
+     "message": "False is not true"
+    }
+   ]
+  },
+  "analyze-admit-digest": {
+   "killed": true,
+   "claim": "Admission refuses cells whose digest differs from PREREG (D20).",
+   "tests": [
+    {
+     "test": "tests.test_analyze.TestAdmission.test_foreign_cells_are_refused",
+     "outcome": "kill",
+     "message": "False is not true"
+    }
+   ]
+  },
+  "analyze-admit-config": {
+   "killed": true,
+   "claim": "Admission refuses another configuration (D20).",
+   "tests": [
+    {
+     "test": "tests.test_analyze.TestAdmission.test_other_configuration_is_refused",
+     "outcome": "kill",
+     "message": "False is not true"
+    }
+   ]
+  },
+  "train-nonfinite-as-hit": {
+   "killed": true,
+   "claim": "A non-finite sequence counts as wrong, never as an argmax hit (D21).",
+   "tests": [
+    {
+     "test": "tests.test_train.TestNonFinite.test_nonfinite_sequences_count_as_wrong",
+     "outcome": "kill",
+     "message": "1.0 != 0.5"
+    }
+   ]
+  },
+  "analyze-admit-tag": {
+   "killed": true,
+   "claim": "Admission requires every manifest to name the commit the PREREG tag resolves to (D20).",
+   "tests": [
+    {
+     "test": "tests.test_analyze.TestAdmission.test_manifests_must_name_the_tag",
+     "outcome": "kill",
+     "message": "False is not true"
+    }
+   ]
+  },
+  "train-eligible-infinite-loss": {
+   "killed": true,
+   "claim": "A validation checkpoint with an infinite loss is not eligible (D21).",
+   "tests": [
+    {
+     "test": "tests.test_train.TestEligibility.test_infinite_validation_loss_is_not_eligible",
+     "outcome": "kill",
+     "message": "True is not false"
+    }
+   ]
+  },
+  "analyze-admit-gate-tag": {
+   "killed": true,
+   "claim": "Admission requires the gate to name the commit the PREREG tag resolves to (D20).",
+   "tests": [
+    {
+     "test": "tests.test_analyze.TestAdmission.test_gate_must_name_the_tag",
+     "outcome": "kill",
+     "message": "False is not true"
+    }
+   ]
+  }
+ }
+}
