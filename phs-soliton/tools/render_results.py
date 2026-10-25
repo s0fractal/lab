@@ -53,10 +53,11 @@ def render(r: dict, prereg: dict) -> str:
              if B["available"] else "no data → **False**"),
           f"- **V** (gate and Acc ≥ 0.95 on A at T = 16, sigma 0 in ≥ 4 of 5 seeds): gate {V['gate_ok']}; "
           + "; ".join(f"{NAMES[k]} {v['seeds_ok']}/5" for k, v in V["models"].items()) + f" → **{V['holds']}**",
-          f"- **room** (REFUTED needs Pure-PHS mean sigma_crit ≤ {room.get('sigma_max')} and mean lambda ≤ "
+          f"- **room** (REFUTED needs Pure-PHS mean sigma_crit ≤ {room.get('sigma_max')} or mean lambda ≤ "
           f"{room.get('lambda_max')}): "
-          + (f"Pure sigma_crit {room['pure_sigma_crit_mean']:.4f}, lambda {room['pure_lambda']:+.4f} → "
-             f"**{room['holds']}**" if room["available"] else "no data"), ""]
+          + (f"Pure sigma_crit {room['pure_sigma_crit_mean']:.4f} (room {room.get('sigma')}), lambda "
+             f"{room['pure_lambda']:+.4f} (room {room.get('lambda')}) → **{room['holds']}**"
+             if room["available"] else "no data"), ""]
     o += ["## Per seed", "", "| model | seed | mean sigma_crit (A) | sigma_crit at T = " + ", ".join(map(str, g["T"]))
           + " | lambda (A, sigma 0.10) | Acc A T=16 sigma 0 | mean Acc B sigma 0 |", "|---|---|---|---|---|---|---|"]
     for k, seeds in r["per_seed"].items():
@@ -141,7 +142,7 @@ def figures(r: dict, prereg: dict) -> None:
             for yi, row in enumerate(grid_acc):
                 for xi, v in enumerate(row):
                     if v == v:
-                        ax.text(xi, yi, f"{v:.2f}"[1:] if v < 1 else "1", ha="center", va="center", fontsize=6,
+                        ax.text(xi, yi, "1" if round(v, 2) >= 1 else f"{v:.2f}"[1:], ha="center", va="center", fontsize=6,
                                 color=INK if v < 0.55 else SURFACE)
             ax.set_yticks(range(len(Ts)), [str(T) for T in Ts])
             ax.set_ylabel(f"{NAMES[k]}\nT", color=MUTED, fontsize=8)
