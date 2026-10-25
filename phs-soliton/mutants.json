@@ -1,0 +1,127 @@
+{
+ "about": "Named mutants of GOAL decision 3 and the task generators. Each is an exact find/replace in one file; every test in `kills` must fail on an assertion (tools/run_mutants.py).",
+ "mutants": {
+  "gyro-explicit": {
+   "claim": "Tests (1) and (2) see the PDF's explicit gyroscopic kick: second order at a fixed horizon, a bounded long run, and the Gibbs variance all fail under it.",
+   "file": "phs/core.py",
+   "find": "gyro: str = \"cayley\"",
+   "replace": "gyro: str = \"explicit\"",
+   "kills": [
+    "tests.test_core.Test1EnergyOrderAtFixedHorizon.test_order_at_fixed_horizon",
+    "tests.test_core.Test1EnergyOrderAtFixedHorizon.test_bounded_long_run",
+    "tests.test_core.Test2Gibbs.test_variance_matches_tau0_mass"
+   ]
+  },
+  "ou-no-sqrt-mass": {
+   "claim": "Test (2) sees an O-step noise not scaled by M^1/2 (Cov(P) = tau0 I instead of tau0 M).",
+   "file": "phs/core.py",
+   "find": "P = c1 * P + c2 * sqrt_m * xi",
+   "replace": "P = c1 * P + c2 * xi",
+   "kills": [
+    "tests.test_core.Test2Gibbs.test_variance_matches_tau0_mass"
+   ]
+  },
+  "q-wrap-identity": {
+   "claim": "Test (3) sees Q_top computed without wrap (the telescoping sum is identically 0).",
+   "file": "phs/core.py",
+   "find": "bonds = wrap(torch.roll(theta, -1, dims=-2) - theta)",
+   "replace": "bonds = (torch.roll(theta, -1, dims=-2) - theta)",
+   "kills": [
+    "tests.test_core.Test3Charge.test_figure2_ring",
+    "tests.test_core.Test3Charge.test_antipodal_half_open"
+   ]
+  },
+  "q-denominator": {
+   "claim": "Test (3)'s integrality bound sees a charge not divided by exactly 2 pi.",
+   "file": "phs/core.py",
+   "find": "return bonds.sum(dim=-2) / TAU",
+   "replace": "return bonds.sum(dim=-2) / 6.28",
+   "kills": [
+    "tests.test_core.Test3Charge.test_integer_on_random_float32"
+   ]
+  },
+  "wrap-closed-right": {
+   "claim": "Test (3) pins the half-open convention [-pi, pi): wrapping into (-pi, pi] flips the antipodal charge.",
+   "file": "phs/core.py",
+   "find": "return torch.remainder(x + math.pi, TAU) - math.pi",
+   "replace": "return math.pi - torch.remainder(math.pi - x, TAU)",
+   "kills": [
+    "tests.test_core.Test3Charge.test_antipodal_half_open"
+   ]
+  },
+  "att-no-symmetrization": {
+   "claim": "Test (4) sees the attention force without the symmetrized kernel (A_ij + A_ji)/2.",
+   "file": "phs/core.py",
+   "find": "A_sym = 0.5 * (A + A.transpose(-1, -2))",
+   "replace": "A_sym = A",
+   "kills": [
+    "tests.test_core.Test4Forces.test_attention",
+    "tests.test_core.Test4Forces.test_total"
+   ]
+  },
+  "lattice-sign": {
+   "claim": "Test (4) sees the lattice force with its sign reversed.",
+   "file": "phs/core.py",
+   "find": "return g_lat * (torch.sin(fwd) - torch.sin(bwd))",
+   "replace": "return -g_lat * (torch.sin(fwd) - torch.sin(bwd))",
+   "kills": [
+    "tests.test_core.Test4Forces.test_lattice",
+    "tests.test_core.Test4Forces.test_total"
+   ]
+  },
+  "pin-sign": {
+   "claim": "Test (4) sees the pinning force with its sign reversed.",
+   "file": "phs/core.py",
+   "find": "- m_pin * g_pin * torch.sin(m_pin * theta)",
+   "replace": "+ m_pin * g_pin * torch.sin(m_pin * theta)",
+   "kills": [
+    "tests.test_core.Test4Forces.test_lattice"
+   ]
+  },
+  "drive-sign": {
+   "claim": "Test (4) sees the input-port force with its sign reversed.",
+   "file": "phs/core.py",
+   "find": "return -drive.u * torch.sin(theta - drive.phi)",
+   "replace": "return drive.u * torch.sin(theta - drive.phi)",
+   "kills": [
+    "tests.test_core.Test4Forces.test_drive"
+   ]
+  },
+  "bptt-detach-theta": {
+   "claim": "Test (5) sees a gradient cut through the force evaluation (forward unchanged, BPTT truncated).",
+   "file": "phs/core.py",
+   "find": "f_int = internal_force(theta, phys)",
+   "replace": "f_int = internal_force(theta.detach(), phys)",
+   "kills": [
+    "tests.test_core.Test5BPTT.test_gradient_matches_finite_differences"
+   ]
+  },
+  "task-b-inversion": {
+   "claim": "The automaton reference sees a wrong inversion rule.",
+   "file": "phs/tasks.py",
+   "find": "np.where(c == 3, (Q_MOD - s) % Q_MOD, (s + c) % Q_MOD)",
+   "replace": "np.where(c == 3, (Q_MOD + s) % Q_MOD, (s + c) % Q_MOD)",
+   "kills": [
+    "tests.test_tasks.TestTaskB.test_matches_reference"
+   ]
+  },
+  "task-a-marker-once": {
+   "claim": "Task A's structure test sees the marker shown only once.",
+   "file": "phs/tasks.py",
+   "find": "x[:, 1] = y",
+   "replace": "x[:, 1] = 0",
+   "kills": [
+    "tests.test_tasks.TestTaskA.test_structure"
+   ]
+  },
+  "task-a-pdist": {
+   "claim": "Task A's structure test sees a distractor rate other than p_dist = 0.25.",
+   "file": "phs/tasks.py",
+   "find": "dist = rng.random((n, hold)) < P_DIST",
+   "replace": "dist = rng.random((n, hold)) < 0.3",
+   "kills": [
+    "tests.test_tasks.TestTaskA.test_structure"
+   ]
+  }
+ }
+}
