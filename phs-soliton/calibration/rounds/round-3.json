@@ -1,0 +1,18 @@
+{
+ "round": 3,
+ "about": "Round 3, after round 2: Soliton (N, d) = (32, 2) at lr 1e-2 (s07) is the first PHS configuration that learns task B (val 0.51, still rising at step 4000); Pure at (32, 2) stays at chance on B. Both PHS models get the same two axes around (32, 2), lr 1e-2: a stronger port and weaker damping. GRU: lr either side of 7e-3. Control-GRU-pm starts its lr grid, its parameter count matched to Soliton-PHS at (32, 2).",
+ "trials": [
+  {"id": "p09", "kind": "pure", "cfg": {"lr": 0.01, "N": 32, "d": 2, "u_max": 4.0}, "rationale": "(32, 2), lr 1e-2, stronger port"},
+  {"id": "p10", "kind": "pure", "cfg": {"lr": 0.01, "N": 32, "d": 2, "gamma": 0.2}, "rationale": "(32, 2), lr 1e-2, weaker damping"},
+  {"id": "s09", "kind": "soliton", "cfg": {"lr": 0.01, "N": 32, "d": 2, "u_max": 4.0}, "rationale": "(32, 2), lr 1e-2, stronger port"},
+  {"id": "s10", "kind": "soliton", "cfg": {"lr": 0.01, "N": 32, "d": 2, "gamma": 0.2}, "rationale": "(32, 2), lr 1e-2, weaker damping"},
+  {"id": "g09", "kind": "gru", "cfg": {"lr": 0.006}, "rationale": "lr just below 7e-3"},
+  {"id": "g10", "kind": "gru", "cfg": {"lr": 0.008}, "rationale": "lr just above 7e-3"},
+  {"id": "q01", "kind": "gru_pm", "cfg": {"N": 32, "d": 2, "lr": 0.003}, "rationale": "lr grid; parameter count matched to Soliton-PHS (32, 2)"},
+  {"id": "q02", "kind": "gru_pm", "cfg": {"N": 32, "d": 2, "lr": 0.005}, "rationale": "lr grid"},
+  {"id": "q03", "kind": "gru_pm", "cfg": {"N": 32, "d": 2, "lr": 0.007}, "rationale": "lr grid"},
+  {"id": "q04", "kind": "gru_pm", "cfg": {"N": 32, "d": 2, "lr": 0.01}, "rationale": "lr grid"},
+  {"id": "q05", "kind": "gru_pm", "cfg": {"N": 32, "d": 2, "lr": 0.015}, "rationale": "lr grid"},
+  {"id": "q06", "kind": "gru_pm", "cfg": {"N": 32, "d": 2, "lr": 0.02}, "rationale": "lr grid"}
+ ]
+}

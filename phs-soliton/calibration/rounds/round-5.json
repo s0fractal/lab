@@ -1,0 +1,8 @@
+{
+ "round": 5,
+ "about": "Round 5: the last two configurations of Control-GRU-pm, either side of its best lr 3e-2 (2e-2 left task A unlearned; 5e-2 lost task B). Pure-PHS and Soliton-PHS have used their 12; Control-GRU stops at 10.",
+ "trials": [
+  {"id": "q11", "kind": "gru_pm", "cfg": {"N": 32, "d": 2, "lr": 0.025}, "rationale": "between 2e-2 and 3e-2"},
+  {"id": "q12", "kind": "gru_pm", "cfg": {"N": 32, "d": 2, "lr": 0.04}, "rationale": "between 3e-2 and 5e-2"}
+ ]
+}

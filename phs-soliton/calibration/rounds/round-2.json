@@ -1,0 +1,18 @@
+{
+ "round": 2,
+ "about": "Round 2, after round 1 showed lr 1e-2 best for all three models within 4000 steps, and both PHS models at chance on task B in every configuration. PHS: a higher lr, fewer sub-steps, the other (N, d) at lr 1e-2, and one model-specific axis (Pure: shorter token time; Soliton: pinning multiplicity 4). GRU: lr around 1e-2.",
+ "trials": [
+  {"id": "p05", "kind": "pure", "cfg": {"lr": 0.02}, "rationale": "lr above the round-1 best"},
+  {"id": "p06", "kind": "pure", "cfg": {"lr": 0.01, "S": 2}, "rationale": "fewer sub-steps at the best lr (cheaper; coarser integration)"},
+  {"id": "p07", "kind": "pure", "cfg": {"lr": 0.01, "N": 32, "d": 2}, "rationale": "the other (N, d) at the best lr"},
+  {"id": "p08", "kind": "pure", "cfg": {"lr": 0.01, "dt": 0.5}, "rationale": "shorter token time: kick-like input, a probe for task B"},
+  {"id": "s05", "kind": "soliton", "cfg": {"lr": 0.02}, "rationale": "lr above the round-1 best"},
+  {"id": "s06", "kind": "soliton", "cfg": {"lr": 0.01, "S": 2}, "rationale": "fewer sub-steps at the best lr"},
+  {"id": "s07", "kind": "soliton", "cfg": {"lr": 0.01, "N": 32, "d": 2}, "rationale": "the other (N, d) at the best lr"},
+  {"id": "s08", "kind": "soliton", "cfg": {"lr": 0.01, "m_pin": 4}, "rationale": "pinning multiplicity 4: more wells per node"},
+  {"id": "g05", "kind": "gru", "cfg": {"lr": 0.005}, "rationale": "lr between 3e-3 (A fails) and 1e-2 (best)"},
+  {"id": "g06", "kind": "gru", "cfg": {"lr": 0.007}, "rationale": "lr just below the best"},
+  {"id": "g07", "kind": "gru", "cfg": {"lr": 0.015}, "rationale": "lr just above the best"},
+  {"id": "g08", "kind": "gru", "cfg": {"lr": 0.02}, "rationale": "lr between 1e-2 and 3e-2 (B fails)"}
+ ]
+}

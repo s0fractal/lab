@@ -1,5 +1,5 @@
 {
- "about": "Named mutants of GOAL decision 3 and the task generators. Each is an exact find/replace in one file; every test in `kills` must fail on an assertion (tools/run_mutants.py).",
+ "about": "Named mutants of GOAL decision 3, the task generators and the frozen verdict rule. Each is an exact find/replace in one file; every test in `kills` must fail on an assertion (tools/run_mutants.py).",
  "mutants": {
   "gyro-explicit": {
    "claim": "Tests (1) and (2) see the PDF's explicit gyroscopic kick: second order at a fixed horizon, a bounded long run, and the Gibbs variance all fail under it.",
@@ -121,6 +121,205 @@
    "replace": "dist = rng.random((n, hold)) < 0.3",
    "kills": [
     "tests.test_tasks.TestTaskA.test_structure"
+   ]
+  },
+  "analyze-sigma-crit-no-break": {
+   "claim": "sigma_crit counts only the unbroken run of cells above the threshold from sigma = 0.",
+   "file": "analyze.py",
+   "find": "        else:\n            break\n    return best",
+   "replace": "    return best",
+   "kills": [
+    "tests.test_analyze.TestPrimitives.test_sigma_crit_stops_at_the_first_failure"
+   ]
+  },
+  "analyze-perm-strict": {
+   "claim": "The exact permutation p-value counts the observed split itself (min p = 1/252).",
+   "file": "analyze.py",
+   "find": "count += bool(d >= observed - EPS)",
+   "replace": "count += bool(d > observed + EPS)",
+   "kills": [
+    "tests.test_analyze.TestPrimitives.test_exact_permutation"
+   ]
+  },
+  "analyze-holm-plain-alpha": {
+   "claim": "Holm's first step tests the smallest p at alpha / 2.",
+   "file": "analyze.py",
+   "find": "still = still and ps[k] <= alpha / (len(order) - i)",
+   "replace": "still = still and ps[k] <= alpha",
+   "kills": [
+    "tests.test_analyze.TestPrimitives.test_holm_step_down"
+   ]
+  },
+  "analyze-min-effect-ignored": {
+   "claim": "A significant difference below the minimum effect does not count as support.",
+   "file": "analyze.py",
+   "find": "hyp[name][\"holds\"] = bool(rej[name] and hyp[name][\"delta\"] >= hyp[name][\"min_effect\"] - EPS)",
+   "replace": "hyp[name][\"holds\"] = bool(rej[name])",
+   "kills": [
+    "tests.test_analyze.TestVerdicts.test_significant_but_below_minimum_effect_is_not_confirmation"
+   ]
+  },
+  "analyze-room-ignored": {
+   "claim": "REFUTED needs room: a Pure-PHS at the ceiling gives INCONCLUSIVE.",
+   "file": "analyze.py",
+   "find": "elif small and room[\"holds\"]:",
+   "replace": "elif small:",
+   "kills": [
+    "tests.test_analyze.TestVerdicts.test_ceiling_is_inconclusive_not_refuted"
+   ]
+  },
+  "analyze-B-margin-sign": {
+   "claim": "B is non-inferiority with margin 0.05, not superiority by 0.05.",
+   "file": "analyze.py",
+   "find": "B[\"holds\"] = bool(B[\"delta\"] >= -rule[\"B_margin\"] - EPS)",
+   "replace": "B[\"holds\"] = bool(B[\"delta\"] >= rule[\"B_margin\"] - EPS)",
+   "kills": [
+    "tests.test_analyze.TestVerdicts.test_confirmed"
+   ]
+  },
+  "analyze-V-ignored": {
+   "claim": "Without validity V the verdict is INCONCLUSIVE.",
+   "file": "analyze.py",
+   "find": "elif not V[\"holds\"]:",
+   "replace": "elif False:",
+   "kills": [
+    "tests.test_analyze.TestVerdicts.test_validity_needs_learning_at_T16",
+    "tests.test_analyze.TestVerdicts.test_validity_needs_the_gate"
+   ]
+  },
+  "analyze-gate-partial": {
+   "claim": "V needs every mutant killed, not most.",
+   "file": "analyze.py",
+   "find": "gate.get(\"mutants_killed\") == gate.get(\"mutants_total\")",
+   "replace": "gate.get(\"mutants_killed\") <= gate.get(\"mutants_total\")",
+   "kills": [
+    "tests.test_analyze.TestVerdicts.test_validity_needs_the_gate"
+   ]
+  },
+  "analyze-incomplete-ignored": {
+   "claim": "A missing or FAILED run of a verdict model makes the verdict INCONCLUSIVE.",
+   "file": "analyze.py",
+   "find": "if incomplete_verdict:",
+   "replace": "if False:",
+   "kills": [
+    "tests.test_analyze.TestVerdicts.test_missing_verdict_run_is_inconclusive"
+   ]
+  },
+  "analyze-lambda-at-sigma0": {
+   "claim": "lambda is the slope at sigma_ref = 0.10, not at sigma = 0.",
+   "file": "analyze.py",
+   "find": "[acc(k, \"A\", T, s, rule[\"sigma_ref\"]) for T in Ts]",
+   "replace": "[acc(k, \"A\", T, s, 0.0) for T in Ts]",
+   "kills": [
+    "tests.test_analyze.TestVerdicts.test_confirmed"
+   ]
+  },
+  "analyze-room-both": {
+   "claim": "Room on one metric is enough for REFUTED (the hypothesis is a conjunction).",
+   "file": "analyze.py",
+   "find": "room[\"holds\"] = room[\"sigma\"] or room[\"lambda\"]",
+   "replace": "room[\"holds\"] = room[\"sigma\"] and room[\"lambda\"]",
+   "kills": [
+    "tests.test_analyze.TestVerdicts.test_room_on_one_metric_is_enough_to_refute"
+   ]
+  },
+  "analyze-lambda-floor-ignored": {
+   "claim": "A2 and G2 need the lambda floor (D19).",
+   "file": "analyze.py",
+   "find": "hyp[name][\"holds\"] = hyp[name][\"holds\"] and floor_ok",
+   "replace": "hyp[name][\"holds\"] = hyp[name][\"holds\"]",
+   "kills": [
+    "tests.test_analyze.TestVerdicts.test_flat_slope_at_the_chance_floor_is_not_slower_decay"
+   ]
+  },
+  "analyze-gate-exit-ignored": {
+   "claim": "V needs a mutant runner that exited 0 in this gate (D20).",
+   "file": "analyze.py",
+   "find": "and gate.get(\"mutants_exit\") == 0 and gate.get(\"prereg_sha256\") == prereg_sha",
+   "replace": "and gate.get(\"prereg_sha256\") == prereg_sha",
+   "kills": [
+    "tests.test_analyze.TestVerdicts.test_validity_needs_a_complete_fresh_gate"
+   ]
+  },
+  "analyze-gate-registered-ignored": {
+   "claim": "V needs every registered mutant, not a smaller matrix (D20).",
+   "file": "analyze.py",
+   "find": "gate.get(\"mutants_killed\") == gate.get(\"mutants_total\") == registered_mutants",
+   "replace": "gate.get(\"mutants_killed\") == gate.get(\"mutants_total\")",
+   "kills": [
+    "tests.test_analyze.TestVerdicts.test_validity_needs_a_complete_fresh_gate"
+   ]
+  },
+  "analyze-admit-duplicate": {
+   "claim": "Admission refuses a run twice (D20).",
+   "file": "analyze.py",
+   "find": "problems.append(f\"{fname}: duplicate of {seen[ident]}\")",
+   "replace": "pass",
+   "kills": [
+    "tests.test_analyze.TestAdmission.test_duplicate_run_is_refused"
+   ]
+  },
+  "analyze-admit-namespace": {
+   "claim": "Admission refuses calibration cells (D20).",
+   "file": "analyze.py",
+   "find": "if m.get(\"cell_namespace\") != \"test\":",
+   "replace": "if False:",
+   "kills": [
+    "tests.test_analyze.TestAdmission.test_calibration_cells_are_refused"
+   ]
+  },
+  "analyze-admit-digest": {
+   "claim": "Admission refuses cells whose digest differs from PREREG (D20).",
+   "file": "analyze.py",
+   "find": "if c.get(\"digest\") != prereg[\"tasks\"][\"digests\"].get(f\"{ident[1]}/{ident[2]}/{key}\"):",
+   "replace": "if False:",
+   "kills": [
+    "tests.test_analyze.TestAdmission.test_foreign_cells_are_refused"
+   ]
+  },
+  "analyze-admit-config": {
+   "claim": "Admission refuses another configuration (D20).",
+   "file": "analyze.py",
+   "find": "if m.get(\"cfg\") != expected_config(prereg, ident[0], ident[1]):",
+   "replace": "if False:",
+   "kills": [
+    "tests.test_analyze.TestAdmission.test_other_configuration_is_refused"
+   ]
+  },
+  "train-nonfinite-as-hit": {
+   "claim": "A non-finite sequence counts as wrong, never as an argmax hit (D21).",
+   "file": "phs/train.py",
+   "find": "hit = (logits[:, -1].argmax(-1) == targets[sl][:, -1]) & finite",
+   "replace": "hit = (logits[:, -1].argmax(-1) == targets[sl][:, -1])",
+   "kills": [
+    "tests.test_train.TestNonFinite.test_nonfinite_sequences_count_as_wrong"
+   ]
+  },
+  "analyze-admit-tag": {
+   "claim": "Admission requires every manifest to name the commit the PREREG tag resolves to (D20).",
+   "file": "analyze.py",
+   "find": "if m.get(\"tag_commit\") != tag_commit:",
+   "replace": "if False:",
+   "kills": [
+    "tests.test_analyze.TestAdmission.test_manifests_must_name_the_tag"
+   ]
+  },
+  "train-eligible-infinite-loss": {
+   "claim": "A validation checkpoint with an infinite loss is not eligible (D21).",
+   "file": "phs/train.py",
+   "find": "return v[\"nonfinite\"] == 0 and math.isfinite(v[\"loss\"])",
+   "replace": "return v[\"nonfinite\"] == 0",
+   "kills": [
+    "tests.test_train.TestEligibility.test_infinite_validation_loss_is_not_eligible"
+   ]
+  },
+  "analyze-admit-gate-tag": {
+   "claim": "Admission requires the gate to name the commit the PREREG tag resolves to (D20).",
+   "file": "analyze.py",
+   "find": "if gate is not None and gate.get(\"tag_commit\") != tag_commit:",
+   "replace": "if False:",
+   "kills": [
+    "tests.test_analyze.TestAdmission.test_gate_must_name_the_tag"
    ]
   }
  }

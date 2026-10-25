@@ -1,0 +1,13 @@
+You are reviewing a pre-registration before it is frozen by a git tag. Repository: /Users/s0fractal/Projects/.worktrees/lab-phs, directory phs-soliton/, commit cbc355f25bd0cef72f70352d9ecfd23d5e7573ac.
+
+Read GOAL.md (the brief, in Ukrainian), prereg.json (the source) and PREREG.md (its rendering), analyze.py (the frozen verdict computation), tools/confirm.py (the confirmatory runner), phs/*.py (models, training, tasks), tests/, mutants.json, tools/run_mutants.py and calibration/SUMMARY.md.
+
+Find defects that would make the verdict wrong, unreproducible, or open to choices made after seeing results:
+1. places where analyze.py does not compute what prereg.json states;
+2. ambiguities or contradictions in the verdict rule;
+3. leaks of test cells into calibration or checkpoint selection;
+4. unfair differences between models in training or evaluation;
+5. ways the runner can produce or accept results that do not correspond to the frozen code and PREREG;
+6. departures from GOAL.md that are not recorded as decisions with a reason.
+
+Read-only: do not modify any file. For each finding give file:line, a concrete failure scenario, and a severity (P1 blocks freezing, P2 should be fixed before freezing, P3 note). End with one line: ACCEPT or AMEND.
