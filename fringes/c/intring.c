@@ -1,7 +1,9 @@
 /* Integer ring in C: the third twin of fringes/intring.py and web/intring.js. No floating point anywhere, only
    int64 arithmetic with floored shifts and floored division (written out, so the result does not depend on how the
-   compiler shifts negative numbers). Reads a case in the plain-text format written by `intring.py --ctext` and prints,
-   per sequence, the final phases, momenta and logits, one line each.
+   compiler shifts negative numbers). Scaling by 2^k is a multiplication, never a left shift of a value that can be
+   negative (undefined in C99); fringes/ci.sh also builds this file with -fsanitize=undefined. Reads a case in the
+   plain-text format that c/check_c.py writes from an `intring.py --case` file and prints, per sequence, the final
+   phases, momenta and logits, one line each.
 
    Build: cc -O2 -std=c99 -o intring intring.c
    Run:   ./intring case.txt > out.txt */
@@ -44,7 +46,7 @@ static void force(const i64 *th, i64 gpin, i64 *out, i64 *c, i64 *s, i64 *Am) {
       if (idx > (i64)EXP_RANGE << EXP_STEP) idx = (i64)EXP_RANGE << EXP_STEP;
       e[j] = EXP[idx]; sum += e[j];
     }
-    for (int j = 0; j < N; j++) Am[i * N + j] = fdiv(e[j] << F, sum);
+    for (int j = 0; j < N; j++) Am[i * N + j] = fdiv(e[j] * ((i64)1 << F), sum);
   }
   for (int i = 0; i < N; i++) for (int q = 0; q < D; q++) {
     i64 ac = 0, as = 0;
@@ -102,7 +104,7 @@ int main(int argc, char **argv) {
         i64 Dm = 0; for (int e = 0; e < Nd; e++) Dm += cosI((i64)m_pin * th[e]);
         Dm = fdiv(Dm, Nd);
         Dhat = t == 0 ? Dm : Dhat + mul(ema, Dm - Dhat);
-        gpin = fdiv(g_pin << F, Dhat > floor03 ? Dhat : floor03);
+        gpin = fdiv(g_pin * ((i64)1 << F), Dhat > floor03 ? Dhat : floor03);
       }
       const i64 *ph = phi + (i64)x[t] * Nd, *uu = u + (i64)x[t] * Nd;
       force(th, gpin, fo, c, s, Am);
@@ -132,7 +134,7 @@ int main(int argc, char **argv) {
     for (int e = 0; e < Nd; e++) printf("%lld ", (long long)P[e]);
     printf("| ");
     for (int v = 0; v < V; v++) {
-      i64 acc = b[v] << F;
+      i64 acc = b[v] * ((i64)1 << F);   /* b may be negative: a left shift of it is undefined in C99 */
       for (int i = 0; i < N; i++) for (int q = 0; q < D; q++) {
         i64 base = (i64)v * 3 * Nd + (i64)i * 3 * D;
         acc += W[base + q] * cosI(th[i * D + q]) + W[base + D + q] * sinI(th[i * D + q]) + W[base + 2 * D + q] * P[i * D + q];

@@ -7,12 +7,70 @@
               phi = arg <c(sigma), c(0)>, coh = |<c(sigma), c(0)>| / (|c(sigma)| |c(0)|)
   acc_unwound the trained readout after the counter-rotation theta -> theta - phi(sigma) (P untouched)
   zmeans      class means of z_T minus their mean over classes (7 x 3Nd), for the rotation plane in dial.py
+
+The readout input is built node by node, cat([cos, sin, P], -1) on (B, N, d), then flattened (phs/models.py), so
+z.reshape(B, N, 3d) splits it back. Until the Codex review (F3) this file read z as three contiguous blocks of N d,
+which mixed nodes and momenta: phi, coh and acc_unwound of every earlier probe-*.json are wrong; acc_fixed,
+acc_probe and zmeans never unpacked z and stand. probe.py --selftest checks the layout without a checkpoint.
 """
 import json
-import math
 import sys
 
 import torch
+
+
+def unpack(z, N, d):
+    """(B, 3Nd) readout input -> theta (B, N, d), P (B, N, d)."""
+    z = z.reshape(len(z), N, 3 * d)
+    return torch.atan2(z[..., d:2 * d], z[..., :d]), z[..., 2 * d:]
+
+
+def pack(theta, P):
+    return torch.cat([torch.cos(theta), torch.sin(theta), P], -1).reshape(len(theta), -1)
+
+
+def class_signal(z, y, N, d, K=7):
+    e = torch.exp(1j * unpack(z, N, d)[0]).reshape(len(z), -1)
+    m = torch.stack([e[y == k].mean(0) for k in range(K)])      # (K, N d)
+    return m - m.mean(0, keepdim=True)
+
+
+def overlap(sig, ref):
+    ov = (sig * ref.conj()).sum()
+    return float(torch.angle(ov)), float(ov.abs() / (sig.abs().pow(2).sum().sqrt() * ref.abs().pow(2).sum().sqrt()))
+
+
+def unwind(z, phi, N, d):
+    th, P = unpack(z, N, d)
+    return pack(th - phi, P)
+
+
+def selftest():
+    g = torch.Generator().manual_seed(1)
+    n, N, d, K = 700, 5, 2, 7
+    y = torch.arange(n) % K
+    th = torch.randn(n, N, d, generator=g, dtype=torch.float64) * 0.3 + 0.9 * y[:, None, None]
+    P = torch.randn(n, N, d, generator=g, dtype=torch.float64) * 3
+    z = pack(th, P)
+    errs = {"zero rotation is the identity": float((unwind(z, 0.0, N, d) - z).abs().max())}
+    a = 1.234
+    phi, coh = overlap(class_signal(pack(th + a, P), y, N, d), class_signal(z, y, N, d))
+    errs["a global shift a reads as phi = a"] = abs(phi - a)
+    errs["... with coh = 1"] = abs(coh - 1)
+    zu = unwind(pack(th + a, P), a, N, d)
+    errs["unwinding the shift returns z"] = float((zu - z).abs().max())
+    errs["P is untouched"] = float((unpack(zu, N, d)[1] - P).abs().max())
+    for k, v in errs.items():
+        print(f"{'ok ' if v < 1e-9 else 'BAD'} {k}: {v:.2e}")
+    # bite: the old contiguous-block reading fails the identity
+    old = torch.atan2(z[:, N * d:2 * N * d], z[:, :N * d])
+    bite = float((torch.cat([old.cos(), old.sin(), z[:, 2 * N * d:]], 1) - z).abs().max())
+    print(f"{'ok ' if bite > 0.1 else 'BAD'} the old block layout fails the identity: {bite:.2f}")
+    sys.exit(0 if max(errs.values()) < 1e-9 and bite > 0.1 else 1)
+
+
+if sys.argv[1] == "--selftest":
+    selftest()
 
 LAB, ckpt, out = sys.argv[1], sys.argv[2], sys.argv[3]
 sys.path.insert(0, f"{LAB}/phs-soliton")
@@ -55,26 +113,16 @@ def lda(ztr, ytr, zte, yte, K=7, lam=1e-3):
     return float((score.argmax(1) == yte).double().mean())
 
 
-def class_signal(z, y, K=7):
-    th = torch.atan2(z[:, N * d:2 * N * d], z[:, :N * d])       # theta from (cos, sin)
-    e = torch.exp(1j * th)
-    m = torch.stack([e[y == k].mean(0) for k in range(K)])      # (K, N d)
-    return m - m.mean(0, keepdim=True)
-
-
 sigmas = [round(0.05 * i, 2) for i in range(41)]
 rows, c0 = [], None
 for s in sigmas:
     z, logit, y = final_state(s)
     half = len(y) // 2
-    sig = class_signal(z, y)
+    sig = class_signal(z, y, N, d)
     if c0 is None:
         c0 = sig
-    ov = (sig * c0.conj()).sum()
-    phi = float(torch.angle(ov))
-    coh = float(ov.abs() / (sig.abs().pow(2).sum().sqrt() * c0.abs().pow(2).sum().sqrt()))
-    th = torch.atan2(z[:, N * d:2 * N * d], z[:, :N * d]) - phi
-    zu = torch.cat([torch.cos(th), torch.sin(th), z[:, 2 * N * d:]], 1)
+    phi, coh = overlap(sig, c0)
+    zu = unwind(z, phi, N, d)
     acc_unwound = float((model.readout.double()(zu).argmax(1) == y).double().mean())
     model.readout.float()
     conf = torch.zeros(7, 7)
@@ -89,4 +137,5 @@ for s in sigmas:
     print(json.dumps(row), flush=True)
     row["zmeans"] = row_z
     rows.append(row)
-json.dump({"ckpt": ckpt, "kind": c["kind"], "T": T, "step": c["step"], "n": n, "rows": rows}, open(out, "w"), indent=1)
+json.dump({"version": 2, "ckpt": ckpt, "kind": c["kind"], "T": T, "step": c["step"], "n": n, "rows": rows}, open(out, "w"),
+          indent=1)

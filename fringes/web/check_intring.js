@@ -7,9 +7,18 @@ const IntRing = require("./intring.js");
 const fs = require("fs");
 const cs = JSON.parse(fs.readFileSync(process.argv[2]));
 const bite = process.argv.includes("--bite");
+if (!cs.seqs || !cs.seqs.length) {
+  console.log(`${cs.name}: REFUSED: empty corpus`);  // zero comparisons must not read as a pass (Codex review F1)
+  process.exit(1);
+}
 const R = IntRing.load(bite ? { ...cs.export, rnd: 1 - (cs.export.rnd ?? 0) } : cs.export), run = IntRing.makeRun(R);
 let bad = 0;
+const Nd = R.N * R.d;
 cs.seqs.forEach((s, k) => {
+  if (s.th.length !== Nd || s.P.length !== Nd || s.logits.length !== R.V) {
+    console.log(`${cs.name}: REFUSED: sequence ${k} of the case has shape ${s.th.length},${s.P.length},${s.logits.length}`);
+    process.exit(1);
+  }
   const out = run(s.x, s.sigmaQ, cs.seed, k);
   const eq = (a, b) => a.length === b.length && a.every((v, i) => v === b[i]);
   if (!eq(Array.from(out.th), s.th) || !eq(Array.from(out.P), s.P) || !eq(Array.from(out.logits), s.logits)) bad++;
