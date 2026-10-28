@@ -1,0 +1,561 @@
+{
+ "snapshot": "rounding-2026-10-28",
+ "what": "post hoc fringes runs behind fringes/README.md; not part of the phs-soliton PREREG v1 verdict",
+ "source_commit": "7ac8dbcae674115180181a806aa5f34506af6963",
+ "source_note": "the code at this commit; earlier files were made by earlier versions of the same scripts (see status for the two corrected measurements)",
+ "environment": {
+  "python": "3.13.17",
+  "torch": "2.14.1+cu130",
+  "numpy": "2.5.3",
+  "platform": "Linux-6.18.44-fc-v180-x86_64-with-glibc2.39",
+  "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz"
+ },
+ "commands_run_from": "fringes/, with LAB = the lab checkout and the phs-soliton venv (uv sync --frozen)",
+ "cfgs": {},
+ "files": [
+  {
+   "path": "exports/pure-s901.json",
+   "role": "float export of seeds 901-902 for the rounding study",
+   "made_by": "export_js.py LAB artifacts/pr7-2026-10-28/checkpoints/pure-T032-s901-step04000.pt runs/js/pure-s901.json",
+   "from": "runs/js/pure-s901.json",
+   "bytes": 33750,
+   "sha256": "c6a9ebe8a4f3cb03339224543ced4278929eb4262885682d308d646967e941be"
+  },
+  {
+   "path": "exports/pure-s902.json",
+   "role": "float export of seeds 901-902 for the rounding study",
+   "made_by": "export_js.py LAB artifacts/pr7-2026-10-28/checkpoints/pure-T032-s902-step04000.pt runs/js/pure-s902.json",
+   "from": "runs/js/pure-s902.json",
+   "bytes": 33767,
+   "sha256": "c4e0d287d82f2a4f09701b5a28b66b8e005243656614f3ce6869872d3e942d50"
+  },
+  {
+   "path": "exports/soliton-s901.json",
+   "role": "float export of seeds 901-902 for the rounding study",
+   "made_by": "export_js.py LAB artifacts/pr7-2026-10-28/checkpoints/soliton-T032-s901-step04000.pt runs/js/soliton-s901.json",
+   "from": "runs/js/soliton-s901.json",
+   "bytes": 33868,
+   "sha256": "391ed0789407191e9162f51f6ce9e7620b4e4596decef3b0180845d304a455ed"
+  },
+  {
+   "path": "exports/soliton-s902.json",
+   "role": "float export of seeds 901-902 for the rounding study",
+   "made_by": "export_js.py LAB artifacts/pr7-2026-10-28/checkpoints/soliton-T032-s902-step04000.pt runs/js/soliton-s902.json",
+   "from": "runs/js/soliton-s902.json",
+   "bytes": 33802,
+   "sha256": "e38533dc44ca838e479c00850dbb5eebdfc2f785a9db40caf1b52a2ff223d444"
+  },
+  {
+   "path": "results/rounding/cum-pure-A6-dither0.75.json",
+   "role": "rerun with the accumulated rounding error",
+   "made_by": "rounding.py LAB artifacts/pr7-2026-10-28/exports/pure.json 6 6 dither:0.75 runs/rounding/cum-pure-A6-dither0.75.json 512",
+   "from": "runs/rounding/cum-pure-A6-dither0.75.json",
+   "bytes": 3572,
+   "sha256": "9665ef0fb183dfa6607fff5b66d3eae36d7f97a622fbc83d82b844a65ef433fc"
+  },
+  {
+   "path": "results/rounding/cum-pure-A6-feedback.json",
+   "role": "rerun with the accumulated rounding error",
+   "made_by": "rounding.py LAB artifacts/pr7-2026-10-28/exports/pure.json 6 6 feedback runs/rounding/cum-pure-A6-feedback.json 512",
+   "from": "runs/rounding/cum-pure-A6-feedback.json",
+   "bytes": 3601,
+   "sha256": "3683b6582102c0a73b57ea8bc883d77b309d23c854dc1969706f45bc82567c9a"
+  },
+  {
+   "path": "results/rounding/cum-pure-A6-nearest.json",
+   "role": "rerun with the accumulated rounding error",
+   "made_by": "rounding.py LAB artifacts/pr7-2026-10-28/exports/pure.json 6 6 nearest runs/rounding/cum-pure-A6-nearest.json 512",
+   "from": "runs/rounding/cum-pure-A6-nearest.json",
+   "bytes": 3576,
+   "sha256": "7094cff06a56460c067b7cdb1cc5364538805146aaa9b3b59c08b5c2a60055da"
+  },
+  {
+   "path": "results/rounding/cum-pure-A6-stochastic.json",
+   "role": "rerun with the accumulated rounding error",
+   "made_by": "rounding.py LAB artifacts/pr7-2026-10-28/exports/pure.json 6 6 stochastic runs/rounding/cum-pure-A6-stochastic.json 512",
+   "from": "runs/rounding/cum-pure-A6-stochastic.json",
+   "bytes": 3579,
+   "sha256": "41133471996cc105ff94c64f4e4e4db553faca62a52464360a6f0d79335e3f24"
+  },
+  {
+   "path": "results/rounding/cum-soliton-A7-dither0.5.json",
+   "role": "rerun with the accumulated rounding error",
+   "made_by": "rounding.py LAB artifacts/pr7-2026-10-28/exports/soliton.json 7 7 dither:0.5 runs/rounding/cum-soliton-A7-dither0.5.json 512",
+   "from": "runs/rounding/cum-soliton-A7-dither0.5.json",
+   "bytes": 3584,
+   "sha256": "913639f107b56aff25b75c232df3fabb681a4bc2c4fb70524026d2bdd0d54aa5"
+  },
+  {
+   "path": "results/rounding/cum-soliton-A7-feedback.json",
+   "role": "rerun with the accumulated rounding error",
+   "made_by": "rounding.py LAB artifacts/pr7-2026-10-28/exports/soliton.json 7 7 feedback runs/rounding/cum-soliton-A7-feedback.json 512",
+   "from": "runs/rounding/cum-soliton-A7-feedback.json",
+   "bytes": 3604,
+   "sha256": "bb331e497ce4f6f88c502c2a2d822933c7bdcb1354c82afef4c0e972163b26d8"
+  },
+  {
+   "path": "results/rounding/cum-soliton-A7-nearest.json",
+   "role": "rerun with the accumulated rounding error",
+   "made_by": "rounding.py LAB artifacts/pr7-2026-10-28/exports/soliton.json 7 7 nearest runs/rounding/cum-soliton-A7-nearest.json 512",
+   "from": "runs/rounding/cum-soliton-A7-nearest.json",
+   "bytes": 3581,
+   "sha256": "4409359ee278e445fc1055ecff71896e4fb610840d511bde2682d73ca9928b28"
+  },
+  {
+   "path": "results/rounding/cum-soliton-A7-stochastic.json",
+   "role": "rerun with the accumulated rounding error",
+   "made_by": "rounding.py LAB artifacts/pr7-2026-10-28/exports/soliton.json 7 7 stochastic runs/rounding/cum-soliton-A7-stochastic.json 512",
+   "from": "runs/rounding/cum-soliton-A7-stochastic.json",
+   "bytes": 3581,
+   "sha256": "8a483025f9b4d065722fb17485b1687a1740f10d2a7949b1fd26402c4e2b71e9"
+  },
+  {
+   "path": "results/rounding/pure-A24-B6-nearest.json",
+   "role": "rounding control, seed 900 (README: rounding instead of noise)",
+   "made_by": "rounding.py LAB artifacts/pr7-2026-10-28/exports/pure.json 24 6 nearest runs/rounding/pure-A24-B6-nearest.json 512",
+   "from": "runs/rounding/pure-A24-B6-nearest.json",
+   "bytes": 2388,
+   "sha256": "5af2d5a7da826219693f198faf3e4ceab49a867b9fc93b49e2d3a295f30c2cef"
+  },
+  {
+   "path": "results/rounding/pure-A24-B7-nearest.json",
+   "role": "rounding control, seed 900 (README: rounding instead of noise)",
+   "made_by": "rounding.py LAB artifacts/pr7-2026-10-28/exports/pure.json 24 7 nearest runs/rounding/pure-A24-B7-nearest.json 512",
+   "from": "runs/rounding/pure-A24-B7-nearest.json",
+   "bytes": 2409,
+   "sha256": "74ca42f53ec1581ae99cf2e00b341c6df1cde7db697f5b95a52619976295fcd5"
+  },
+  {
+   "path": "results/rounding/pure-A6-B6-dither0.125.json",
+   "role": "dither-width scan, seed 900",
+   "made_by": "rounding.py LAB artifacts/pr7-2026-10-28/exports/pure.json 6 6 dither:0.125 runs/rounding/pure-A6-B6-dither0.125.json 512",
+   "from": "runs/rounding/pure-A6-B6-dither0.125.json",
+   "bytes": 2563,
+   "sha256": "fd2cc8bb97942e3e60804c347601a0cc15bb35d9fd4ba12b5cd27779b1189b9f"
+  },
+  {
+   "path": "results/rounding/pure-A6-B6-dither0.25.json",
+   "role": "dither-width scan, seed 900",
+   "made_by": "rounding.py LAB artifacts/pr7-2026-10-28/exports/pure.json 6 6 dither:0.25 runs/rounding/pure-A6-B6-dither0.25.json 512",
+   "from": "runs/rounding/pure-A6-B6-dither0.25.json",
+   "bytes": 2551,
+   "sha256": "a005a472a43f3e47942e4057d046fb84384c5231ee7e6024649ca6fe73c9e400"
+  },
+  {
+   "path": "results/rounding/pure-A6-B6-dither0.5.json",
+   "role": "dither-width scan, seed 900",
+   "made_by": "rounding.py LAB artifacts/pr7-2026-10-28/exports/pure.json 6 6 dither:0.5 runs/rounding/pure-A6-B6-dither0.5.json 512",
+   "from": "runs/rounding/pure-A6-B6-dither0.5.json",
+   "bytes": 2548,
+   "sha256": "d0a6a58bfbfef2568ae4307c754957fcce61586ef5ab02f581e6f97267b567cb"
+  },
+  {
+   "path": "results/rounding/pure-A6-B6-dither0.75.json",
+   "role": "dither-width scan, seed 900",
+   "made_by": "rounding.py LAB artifacts/pr7-2026-10-28/exports/pure.json 6 6 dither:0.75 runs/rounding/pure-A6-B6-dither0.75.json 512",
+   "from": "runs/rounding/pure-A6-B6-dither0.75.json",
+   "bytes": 2560,
+   "sha256": "2aab79f0da126ac951b12790007a5cc9a8bbca78b2f241dde3bbfd4eed86c1c1"
+  },
+  {
+   "path": "results/rounding/pure-A6-B6-feedback.json",
+   "role": "rounding control, seed 900 (README: rounding instead of noise)",
+   "made_by": "rounding.py LAB artifacts/pr7-2026-10-28/exports/pure.json 6 6 feedback runs/rounding/pure-A6-B6-feedback.json 512",
+   "from": "runs/rounding/pure-A6-B6-feedback.json",
+   "bytes": 2548,
+   "sha256": "ea733d52cbf132f066cf9ca91b104aa64030a5ab8beacb9d71368d5b62d6e715"
+  },
+  {
+   "path": "results/rounding/pure-A6-B6-floor.json",
+   "role": "rounding control, seed 900 (README: rounding instead of noise)",
+   "made_by": "rounding.py LAB artifacts/pr7-2026-10-28/exports/pure.json 6 6 floor runs/rounding/pure-A6-B6-floor.json 512",
+   "from": "runs/rounding/pure-A6-B6-floor.json",
+   "bytes": 2516,
+   "sha256": "f55dea28983a9d9534fcac467e4a4a36ed2e8d2f64c2b8594c8e2b210358cac1"
+  },
+  {
+   "path": "results/rounding/pure-A6-B6-nearest+p.json",
+   "role": "rounding control, seed 900 (README: rounding instead of noise)",
+   "made_by": "rounding.py LAB artifacts/pr7-2026-10-28/exports/pure.json 6 6 nearest+p runs/rounding/pure-A6-B6-nearest+p.json 512",
+   "from": "runs/rounding/pure-A6-B6-nearest+p.json",
+   "bytes": 2560,
+   "sha256": "adaa66657d88bf63bac74b102c9908b26a8f8fc475eff393c69eada0104c0806"
+  },
+  {
+   "path": "results/rounding/pure-A6-B6-nearest.json",
+   "role": "rounding control, seed 900 (README: rounding instead of noise)",
+   "made_by": "rounding.py LAB artifacts/pr7-2026-10-28/exports/pure.json 6 6 nearest runs/rounding/pure-A6-B6-nearest.json 512",
+   "from": "runs/rounding/pure-A6-B6-nearest.json",
+   "bytes": 2558,
+   "sha256": "7d20729b4b9a6a1adce3cce755684ea8b1654db15930937fd20722fb5643ed7c"
+  },
+  {
+   "path": "results/rounding/pure-A6-B6-stochastic.json",
+   "role": "rounding control, seed 900 (README: rounding instead of noise)",
+   "made_by": "rounding.py LAB artifacts/pr7-2026-10-28/exports/pure.json 6 6 stochastic runs/rounding/pure-A6-B6-stochastic.json 512",
+   "from": "runs/rounding/pure-A6-B6-stochastic.json",
+   "bytes": 2564,
+   "sha256": "b2ae4b4ed52c2f47b66b3194a8600d310f56f3e2569a9eab0129d782089d9868"
+  },
+  {
+   "path": "results/rounding/pure-A7-B7-feedback.json",
+   "role": "rounding control, seed 900 (README: rounding instead of noise)",
+   "made_by": "rounding.py LAB artifacts/pr7-2026-10-28/exports/pure.json 7 7 feedback runs/rounding/pure-A7-B7-feedback.json 512",
+   "from": "runs/rounding/pure-A7-B7-feedback.json",
+   "bytes": 2562,
+   "sha256": "0b0e266945327e801ca4b13ab1b2300b20d3406f0fe4b1bcd0a527bbd5235e18"
+  },
+  {
+   "path": "results/rounding/pure-A7-B7-floor.json",
+   "role": "rounding control, seed 900 (README: rounding instead of noise)",
+   "made_by": "rounding.py LAB artifacts/pr7-2026-10-28/exports/pure.json 7 7 floor runs/rounding/pure-A7-B7-floor.json 512",
+   "from": "runs/rounding/pure-A7-B7-floor.json",
+   "bytes": 2526,
+   "sha256": "7176a15aa6e8dad0510f2024212ec45ee34f0ebb0458e501836c15df259e0b22"
+  },
+  {
+   "path": "results/rounding/pure-A7-B7-nearest+p.json",
+   "role": "rounding control, seed 900 (README: rounding instead of noise)",
+   "made_by": "rounding.py LAB artifacts/pr7-2026-10-28/exports/pure.json 7 7 nearest+p runs/rounding/pure-A7-B7-nearest+p.json 512",
+   "from": "runs/rounding/pure-A7-B7-nearest+p.json",
+   "bytes": 2568,
+   "sha256": "e6940d86aa0f4cc1290d5ab1f29071093dba0885a5ca9728553df47ab445b11e"
+  },
+  {
+   "path": "results/rounding/pure-A7-B7-nearest.json",
+   "role": "rounding control, seed 900 (README: rounding instead of noise)",
+   "made_by": "rounding.py LAB artifacts/pr7-2026-10-28/exports/pure.json 7 7 nearest runs/rounding/pure-A7-B7-nearest.json 512",
+   "from": "runs/rounding/pure-A7-B7-nearest.json",
+   "bytes": 2565,
+   "sha256": "46999d2541a6f66d5b0dad8e9bbf4eb19c6e38151c4825a82b6187b4101d22f2"
+  },
+  {
+   "path": "results/rounding/pure-A7-B7-stochastic.json",
+   "role": "rounding control, seed 900 (README: rounding instead of noise)",
+   "made_by": "rounding.py LAB artifacts/pr7-2026-10-28/exports/pure.json 7 7 stochastic runs/rounding/pure-A7-B7-stochastic.json 512",
+   "from": "runs/rounding/pure-A7-B7-stochastic.json",
+   "bytes": 2571,
+   "sha256": "ed96f1384f4da7b6e3d74003d47f3ef65827d1fa068f675c305f4e63bfff6bf6"
+  },
+  {
+   "path": "results/rounding/pure-s901-A6-B6-feedback.json",
+   "role": "rounding control, seeds 901-902",
+   "made_by": "rounding.py LAB runs/js/pure-s901.json 6 6 feedback runs/rounding/pure-s901-A6-B6-feedback.json 512",
+   "from": "runs/rounding/pure-s901-A6-B6-feedback.json",
+   "bytes": 2518,
+   "sha256": "acd5af5fc942cb57e748281cfc08b652bd689cb9b813d88caee594aa6c5d4f01"
+  },
+  {
+   "path": "results/rounding/pure-s901-A6-B6-nearest.json",
+   "role": "rounding control, seeds 901-902",
+   "made_by": "rounding.py LAB runs/js/pure-s901.json 6 6 nearest runs/rounding/pure-s901-A6-B6-nearest.json 512",
+   "from": "runs/rounding/pure-s901-A6-B6-nearest.json",
+   "bytes": 2541,
+   "sha256": "d86c9a50546ad09682aee93261eb90d1bb7fe76ab651c9307f96980a74ff8805"
+  },
+  {
+   "path": "results/rounding/pure-s901-A6-B6-stochastic.json",
+   "role": "rounding control, seeds 901-902",
+   "made_by": "rounding.py LAB runs/js/pure-s901.json 6 6 stochastic runs/rounding/pure-s901-A6-B6-stochastic.json 512",
+   "from": "runs/rounding/pure-s901-A6-B6-stochastic.json",
+   "bytes": 2530,
+   "sha256": "b6ff854c210398b06f4f9f1b064292705c073382e776a9d9e4aab81110641353"
+  },
+  {
+   "path": "results/rounding/pure-s901-A7-B7-feedback.json",
+   "role": "rounding control, seeds 901-902",
+   "made_by": "rounding.py LAB runs/js/pure-s901.json 7 7 feedback runs/rounding/pure-s901-A7-B7-feedback.json 512",
+   "from": "runs/rounding/pure-s901-A7-B7-feedback.json",
+   "bytes": 2519,
+   "sha256": "f2ae49624099e3c60a2afaca8a9ce24403ac7345edcd36a798a2bd3511dd01a3"
+  },
+  {
+   "path": "results/rounding/pure-s901-A7-B7-nearest.json",
+   "role": "rounding control, seeds 901-902",
+   "made_by": "rounding.py LAB runs/js/pure-s901.json 7 7 nearest runs/rounding/pure-s901-A7-B7-nearest.json 512",
+   "from": "runs/rounding/pure-s901-A7-B7-nearest.json",
+   "bytes": 2529,
+   "sha256": "adbe0f78c6ff0778b5b3edf889e06e7b5e2bf88daeb6b14a6771cb8329c3b33d"
+  },
+  {
+   "path": "results/rounding/pure-s901-A7-B7-stochastic.json",
+   "role": "rounding control, seeds 901-902",
+   "made_by": "rounding.py LAB runs/js/pure-s901.json 7 7 stochastic runs/rounding/pure-s901-A7-B7-stochastic.json 512",
+   "from": "runs/rounding/pure-s901-A7-B7-stochastic.json",
+   "bytes": 2553,
+   "sha256": "cc1c8d1b4ca3a2b44577a5e8780526d241fd1b44fbe5499d140f1957769b6567"
+  },
+  {
+   "path": "results/rounding/pure-s902-A6-B6-feedback.json",
+   "role": "rounding control, seeds 901-902",
+   "made_by": "rounding.py LAB runs/js/pure-s902.json 6 6 feedback runs/rounding/pure-s902-A6-B6-feedback.json 512",
+   "from": "runs/rounding/pure-s902-A6-B6-feedback.json",
+   "bytes": 2521,
+   "sha256": "e3ea9a5c2a0dc5dcd6fac096efeb8c1f4032206b9a92db4661d02ce262bb3327"
+  },
+  {
+   "path": "results/rounding/pure-s902-A6-B6-nearest.json",
+   "role": "rounding control, seeds 901-902",
+   "made_by": "rounding.py LAB runs/js/pure-s902.json 6 6 nearest runs/rounding/pure-s902-A6-B6-nearest.json 512",
+   "from": "runs/rounding/pure-s902-A6-B6-nearest.json",
+   "bytes": 2540,
+   "sha256": "435343516f2a1db0d0385944c4c9a58fef7185a3e7aff3e48c7a097f3aee9392"
+  },
+  {
+   "path": "results/rounding/pure-s902-A6-B6-stochastic.json",
+   "role": "rounding control, seeds 901-902",
+   "made_by": "rounding.py LAB runs/js/pure-s902.json 6 6 stochastic runs/rounding/pure-s902-A6-B6-stochastic.json 512",
+   "from": "runs/rounding/pure-s902-A6-B6-stochastic.json",
+   "bytes": 2547,
+   "sha256": "9759296daffd2273361dee9a9279e19e538d0ae3ecdb46394034934fa8d4bfdd"
+  },
+  {
+   "path": "results/rounding/pure-s902-A7-B7-feedback.json",
+   "role": "rounding control, seeds 901-902",
+   "made_by": "rounding.py LAB runs/js/pure-s902.json 7 7 feedback runs/rounding/pure-s902-A7-B7-feedback.json 512",
+   "from": "runs/rounding/pure-s902-A7-B7-feedback.json",
+   "bytes": 2530,
+   "sha256": "7add78db5100fd1fc1807ca76d09f91cfabeca93595056c2d4e97f5ec0682fbc"
+  },
+  {
+   "path": "results/rounding/pure-s902-A7-B7-nearest.json",
+   "role": "rounding control, seeds 901-902",
+   "made_by": "rounding.py LAB runs/js/pure-s902.json 7 7 nearest runs/rounding/pure-s902-A7-B7-nearest.json 512",
+   "from": "runs/rounding/pure-s902-A7-B7-nearest.json",
+   "bytes": 2541,
+   "sha256": "274a71fa5ad97ee1beae3f50b4e6a014d5673530e690b966c7f1b2322ca98d7a"
+  },
+  {
+   "path": "results/rounding/pure-s902-A7-B7-stochastic.json",
+   "role": "rounding control, seeds 901-902",
+   "made_by": "rounding.py LAB runs/js/pure-s902.json 7 7 stochastic runs/rounding/pure-s902-A7-B7-stochastic.json 512",
+   "from": "runs/rounding/pure-s902-A7-B7-stochastic.json",
+   "bytes": 2551,
+   "sha256": "e5455cc4e513889398fe6e5f68439e8782e4297970391a516edee06c9de531a2"
+  },
+  {
+   "path": "results/rounding/soliton-A24-B6-nearest.json",
+   "role": "rounding control, seed 900 (README: rounding instead of noise)",
+   "made_by": "rounding.py LAB artifacts/pr7-2026-10-28/exports/soliton.json 24 6 nearest runs/rounding/soliton-A24-B6-nearest.json 512",
+   "from": "runs/rounding/soliton-A24-B6-nearest.json",
+   "bytes": 2421,
+   "sha256": "8e7f81b8357eccea728d1fafde1e9c000449377bd2cd0986af9a5e46dfb7df88"
+  },
+  {
+   "path": "results/rounding/soliton-A24-B7-nearest.json",
+   "role": "rounding control, seed 900 (README: rounding instead of noise)",
+   "made_by": "rounding.py LAB artifacts/pr7-2026-10-28/exports/soliton.json 24 7 nearest runs/rounding/soliton-A24-B7-nearest.json 512",
+   "from": "runs/rounding/soliton-A24-B7-nearest.json",
+   "bytes": 2403,
+   "sha256": "2c6326d940913d232ec1bb1bdd7c7425acd48a0770356b81bb939e428f145bd3"
+  },
+  {
+   "path": "results/rounding/soliton-A6-B6-feedback.json",
+   "role": "rounding control, seed 900 (README: rounding instead of noise)",
+   "made_by": "rounding.py LAB artifacts/pr7-2026-10-28/exports/soliton.json 6 6 feedback runs/rounding/soliton-A6-B6-feedback.json 512",
+   "from": "runs/rounding/soliton-A6-B6-feedback.json",
+   "bytes": 2560,
+   "sha256": "87dc9207b520d247090456cbca2f1079ff5337add1c08e5eba66990ec263ab47"
+  },
+  {
+   "path": "results/rounding/soliton-A6-B6-floor.json",
+   "role": "rounding control, seed 900 (README: rounding instead of noise)",
+   "made_by": "rounding.py LAB artifacts/pr7-2026-10-28/exports/soliton.json 6 6 floor runs/rounding/soliton-A6-B6-floor.json 512",
+   "from": "runs/rounding/soliton-A6-B6-floor.json",
+   "bytes": 2519,
+   "sha256": "2e88f317ea8bcf7a827d30f37849879b3e58c8be1435c66b8fa5ca210a9d6a3a"
+  },
+  {
+   "path": "results/rounding/soliton-A6-B6-nearest+p.json",
+   "role": "rounding control, seed 900 (README: rounding instead of noise)",
+   "made_by": "rounding.py LAB artifacts/pr7-2026-10-28/exports/soliton.json 6 6 nearest+p runs/rounding/soliton-A6-B6-nearest+p.json 512",
+   "from": "runs/rounding/soliton-A6-B6-nearest+p.json",
+   "bytes": 2565,
+   "sha256": "38f5d6846e8d0cbcfb1d42f3cd610de6e08d41f417cc0de9e1fe284e41f17d4c"
+  },
+  {
+   "path": "results/rounding/soliton-A6-B6-nearest.json",
+   "role": "rounding control, seed 900 (README: rounding instead of noise)",
+   "made_by": "rounding.py LAB artifacts/pr7-2026-10-28/exports/soliton.json 6 6 nearest runs/rounding/soliton-A6-B6-nearest.json 512",
+   "from": "runs/rounding/soliton-A6-B6-nearest.json",
+   "bytes": 2562,
+   "sha256": "d26c1a22a2711603d84281d736059a1654100740177840d09f6420821621a86a"
+  },
+  {
+   "path": "results/rounding/soliton-A6-B6-stochastic.json",
+   "role": "rounding control, seed 900 (README: rounding instead of noise)",
+   "made_by": "rounding.py LAB artifacts/pr7-2026-10-28/exports/soliton.json 6 6 stochastic runs/rounding/soliton-A6-B6-stochastic.json 512",
+   "from": "runs/rounding/soliton-A6-B6-stochastic.json",
+   "bytes": 2565,
+   "sha256": "a1692f2b4844a58ad15c318dffcea24ec6a76a72f09f1756a21e25d64598a735"
+  },
+  {
+   "path": "results/rounding/soliton-A7-B7-dither0.125.json",
+   "role": "dither-width scan, seed 900",
+   "made_by": "rounding.py LAB artifacts/pr7-2026-10-28/exports/soliton.json 7 7 dither:0.125 runs/rounding/soliton-A7-B7-dither0.125.json 512",
+   "from": "runs/rounding/soliton-A7-B7-dither0.125.json",
+   "bytes": 2558,
+   "sha256": "1a889a94974cc9078c04e90130f4581dc956084e9c2110a6767900dbca74c3d6"
+  },
+  {
+   "path": "results/rounding/soliton-A7-B7-dither0.25.json",
+   "role": "dither-width scan, seed 900",
+   "made_by": "rounding.py LAB artifacts/pr7-2026-10-28/exports/soliton.json 7 7 dither:0.25 runs/rounding/soliton-A7-B7-dither0.25.json 512",
+   "from": "runs/rounding/soliton-A7-B7-dither0.25.json",
+   "bytes": 2567,
+   "sha256": "e6bde242910e0bec65ed83efc0c23d36c65a4a546b8bdf6dba7014eb1d0957b6"
+  },
+  {
+   "path": "results/rounding/soliton-A7-B7-dither0.5.json",
+   "role": "dither-width scan, seed 900",
+   "made_by": "rounding.py LAB artifacts/pr7-2026-10-28/exports/soliton.json 7 7 dither:0.5 runs/rounding/soliton-A7-B7-dither0.5.json 512",
+   "from": "runs/rounding/soliton-A7-B7-dither0.5.json",
+   "bytes": 2571,
+   "sha256": "32627ee11e3a3b875fae30e488559376dd13c729ab3fd4d437afb330ee67f2dc"
+  },
+  {
+   "path": "results/rounding/soliton-A7-B7-dither0.75.json",
+   "role": "dither-width scan, seed 900",
+   "made_by": "rounding.py LAB artifacts/pr7-2026-10-28/exports/soliton.json 7 7 dither:0.75 runs/rounding/soliton-A7-B7-dither0.75.json 512",
+   "from": "runs/rounding/soliton-A7-B7-dither0.75.json",
+   "bytes": 2578,
+   "sha256": "7ac4d3db6b78b973090b1e7e601cf9190452e306a774a8428f07f5c4c87996b9"
+  },
+  {
+   "path": "results/rounding/soliton-A7-B7-feedback.json",
+   "role": "rounding control, seed 900 (README: rounding instead of noise)",
+   "made_by": "rounding.py LAB artifacts/pr7-2026-10-28/exports/soliton.json 7 7 feedback runs/rounding/soliton-A7-B7-feedback.json 512",
+   "from": "runs/rounding/soliton-A7-B7-feedback.json",
+   "bytes": 2554,
+   "sha256": "7094ad8f0fd21843326f13f667356da8362ce00426b8839eb9f3b3b74db51df9"
+  },
+  {
+   "path": "results/rounding/soliton-A7-B7-floor.json",
+   "role": "rounding control, seed 900 (README: rounding instead of noise)",
+   "made_by": "rounding.py LAB artifacts/pr7-2026-10-28/exports/soliton.json 7 7 floor runs/rounding/soliton-A7-B7-floor.json 512",
+   "from": "runs/rounding/soliton-A7-B7-floor.json",
+   "bytes": 2540,
+   "sha256": "cb3b6126a4a15c1d7ccf707c8772f921b5d987e4d7e74e3cc3a8c85d4fc76c28"
+  },
+  {
+   "path": "results/rounding/soliton-A7-B7-nearest+p.json",
+   "role": "rounding control, seed 900 (README: rounding instead of noise)",
+   "made_by": "rounding.py LAB artifacts/pr7-2026-10-28/exports/soliton.json 7 7 nearest+p runs/rounding/soliton-A7-B7-nearest+p.json 512",
+   "from": "runs/rounding/soliton-A7-B7-nearest+p.json",
+   "bytes": 2558,
+   "sha256": "d9e06690478fec182435d65d08f38ca1520c49af2869a8d951b52a1b5c75677d"
+  },
+  {
+   "path": "results/rounding/soliton-A7-B7-nearest.json",
+   "role": "rounding control, seed 900 (README: rounding instead of noise)",
+   "made_by": "rounding.py LAB artifacts/pr7-2026-10-28/exports/soliton.json 7 7 nearest runs/rounding/soliton-A7-B7-nearest.json 512",
+   "from": "runs/rounding/soliton-A7-B7-nearest.json",
+   "bytes": 2567,
+   "sha256": "708319f60381562bb78fa4c9fff8d9719c9215ca446255f703649779b2f3287b"
+  },
+  {
+   "path": "results/rounding/soliton-A7-B7-stochastic.json",
+   "role": "rounding control, seed 900 (README: rounding instead of noise)",
+   "made_by": "rounding.py LAB artifacts/pr7-2026-10-28/exports/soliton.json 7 7 stochastic runs/rounding/soliton-A7-B7-stochastic.json 512",
+   "from": "runs/rounding/soliton-A7-B7-stochastic.json",
+   "bytes": 2562,
+   "sha256": "7902b391089584588cbe6a62541b1199593048b0b579b1668fa9f0c95700c00a"
+  },
+  {
+   "path": "results/rounding/soliton-s901-A6-B6-feedback.json",
+   "role": "rounding control, seeds 901-902",
+   "made_by": "rounding.py LAB runs/js/soliton-s901.json 6 6 feedback runs/rounding/soliton-s901-A6-B6-feedback.json 512",
+   "from": "runs/rounding/soliton-s901-A6-B6-feedback.json",
+   "bytes": 2539,
+   "sha256": "02acbf99764436471fb563451d3d4c4209c8c30dd371199c9ef21c89077b75c3"
+  },
+  {
+   "path": "results/rounding/soliton-s901-A6-B6-nearest.json",
+   "role": "rounding control, seeds 901-902",
+   "made_by": "rounding.py LAB runs/js/soliton-s901.json 6 6 nearest runs/rounding/soliton-s901-A6-B6-nearest.json 512",
+   "from": "runs/rounding/soliton-s901-A6-B6-nearest.json",
+   "bytes": 2542,
+   "sha256": "c481857d9c9825d2e985492d06dcde1aff66345d3c80af04bcff7db69bf9295f"
+  },
+  {
+   "path": "results/rounding/soliton-s901-A6-B6-stochastic.json",
+   "role": "rounding control, seeds 901-902",
+   "made_by": "rounding.py LAB runs/js/soliton-s901.json 6 6 stochastic runs/rounding/soliton-s901-A6-B6-stochastic.json 512",
+   "from": "runs/rounding/soliton-s901-A6-B6-stochastic.json",
+   "bytes": 2560,
+   "sha256": "21e55d53167f0a940b994ad57741424cf2a85c5609c66004cf9c163dc9b1719a"
+  },
+  {
+   "path": "results/rounding/soliton-s901-A7-B7-feedback.json",
+   "role": "rounding control, seeds 901-902",
+   "made_by": "rounding.py LAB runs/js/soliton-s901.json 7 7 feedback runs/rounding/soliton-s901-A7-B7-feedback.json 512",
+   "from": "runs/rounding/soliton-s901-A7-B7-feedback.json",
+   "bytes": 2546,
+   "sha256": "6b6ba0edee07f2590794f27166f574f36cce1c7a07da22b5209a32afbc6b9c8d"
+  },
+  {
+   "path": "results/rounding/soliton-s901-A7-B7-nearest.json",
+   "role": "rounding control, seeds 901-902",
+   "made_by": "rounding.py LAB runs/js/soliton-s901.json 7 7 nearest runs/rounding/soliton-s901-A7-B7-nearest.json 512",
+   "from": "runs/rounding/soliton-s901-A7-B7-nearest.json",
+   "bytes": 2550,
+   "sha256": "2cc205703b5f2098d5cf5712ad61cf6b16548ea1dae4c76ad2e89b2f008b9039"
+  },
+  {
+   "path": "results/rounding/soliton-s901-A7-B7-stochastic.json",
+   "role": "rounding control, seeds 901-902",
+   "made_by": "rounding.py LAB runs/js/soliton-s901.json 7 7 stochastic runs/rounding/soliton-s901-A7-B7-stochastic.json 512",
+   "from": "runs/rounding/soliton-s901-A7-B7-stochastic.json",
+   "bytes": 2543,
+   "sha256": "54578e8e9ab7b16060036df4e53891c75e6d7eda499a4e2d05b7f3d5eab3cc73"
+  },
+  {
+   "path": "results/rounding/soliton-s902-A6-B6-feedback.json",
+   "role": "rounding control, seeds 901-902",
+   "made_by": "rounding.py LAB runs/js/soliton-s902.json 6 6 feedback runs/rounding/soliton-s902-A6-B6-feedback.json 512",
+   "from": "runs/rounding/soliton-s902-A6-B6-feedback.json",
+   "bytes": 2537,
+   "sha256": "7eda162d02263c22093738a3375d7e794397ad049722befd5186a6bf0761766c"
+  },
+  {
+   "path": "results/rounding/soliton-s902-A6-B6-nearest.json",
+   "role": "rounding control, seeds 901-902",
+   "made_by": "rounding.py LAB runs/js/soliton-s902.json 6 6 nearest runs/rounding/soliton-s902-A6-B6-nearest.json 512",
+   "from": "runs/rounding/soliton-s902-A6-B6-nearest.json",
+   "bytes": 2541,
+   "sha256": "abbd371aa493d7d3035109ada9b83f7441ba4080588a236518ee9b3c3340c80b"
+  },
+  {
+   "path": "results/rounding/soliton-s902-A6-B6-stochastic.json",
+   "role": "rounding control, seeds 901-902",
+   "made_by": "rounding.py LAB runs/js/soliton-s902.json 6 6 stochastic runs/rounding/soliton-s902-A6-B6-stochastic.json 512",
+   "from": "runs/rounding/soliton-s902-A6-B6-stochastic.json",
+   "bytes": 2546,
+   "sha256": "b40a881bc0e7628cad72b929d1f765716bf5aec80dc21fa02530341e46791c7a"
+  },
+  {
+   "path": "results/rounding/soliton-s902-A7-B7-feedback.json",
+   "role": "rounding control, seeds 901-902",
+   "made_by": "rounding.py LAB runs/js/soliton-s902.json 7 7 feedback runs/rounding/soliton-s902-A7-B7-feedback.json 512",
+   "from": "runs/rounding/soliton-s902-A7-B7-feedback.json",
+   "bytes": 2556,
+   "sha256": "11db54e39e8370fd9f48a8f22d9e2dc825f7c29d4e57a4d93bc8e0b570b493b3"
+  },
+  {
+   "path": "results/rounding/soliton-s902-A7-B7-nearest.json",
+   "role": "rounding control, seeds 901-902",
+   "made_by": "rounding.py LAB runs/js/soliton-s902.json 7 7 nearest runs/rounding/soliton-s902-A7-B7-nearest.json 512",
+   "from": "runs/rounding/soliton-s902-A7-B7-nearest.json",
+   "bytes": 2546,
+   "sha256": "fc174819d1b8758b4df55ce1b39ffc59c045a7901bf4aeaa686d7d9dfed43547"
+  },
+  {
+   "path": "results/rounding/soliton-s902-A7-B7-stochastic.json",
+   "role": "rounding control, seeds 901-902",
+   "made_by": "rounding.py LAB runs/js/soliton-s902.json 7 7 stochastic runs/rounding/soliton-s902-A7-B7-stochastic.json 512",
+   "from": "runs/rounding/soliton-s902-A7-B7-stochastic.json",
+   "bytes": 2544,
+   "sha256": "8a754ca2a174a30247c725d0b92d34edaf7743585e1c98a0c980731201faaa40"
+  }
+ ]
+}

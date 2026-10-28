@@ -27,3 +27,7 @@ jobs:
         run: phs-soliton/.venv/bin/python fringes/artifacts/verify.py fringes/artifacts/pr7-2026-10-28
       - name: the snapshot check must be able to fail
         run: phs-soliton/.venv/bin/python fringes/artifacts/verify.py fringes/artifacts/pr7-2026-10-28 --bite
+      - name: rounding study, replayed from the frozen exports
+        run: phs-soliton/.venv/bin/python fringes/artifacts/verify.py fringes/artifacts/rounding-2026-10-28
+      - name: the rounding check must be able to fail
+        run: phs-soliton/.venv/bin/python fringes/artifacts/verify.py fringes/artifacts/rounding-2026-10-28 --bite

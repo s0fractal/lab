@@ -14,7 +14,8 @@ changes (stochastic rounding takes its offsets from a separate stream).
 Per sigma: accuracy, and over every phase step the mean signed rounding error (LSB), its RMS, the share of steps that
 should move but round to zero (frozen) and the share below 1 LSB; per rotor, the rounding error accumulated over the
 whole sequence (RMS over rotors, and the part that differs between the nodes of one ring).
-Usage: rounding.py LAB EXPORT A B MODE OUT [n]"""
+Usage: rounding.py LAB EXPORT A B MODE OUT [n] [sigmas]   (each sigma is its own run with its own corpus, so a
+comma-separated subset reproduces the same rows; artifacts/verify.py replays two cells this way)"""
 import json
 import sys
 
@@ -32,7 +33,7 @@ rnd, prnd = MODES[mode] if not mode.startswith("dither:") else (2, 0)
 ring = IntRing(json.load(open(exp_path)), A=A, B=B, rnd=rnd, prnd=prnd)
 if mode.startswith("dither:"):
     ring.sr_w = int(round(float(mode.split(":")[1]) * (1 << 20)))
-SIG = [round(0.1 * i, 1) for i in range(13)]
+SIG = [float(v) for v in sys.argv[8].split(",")] if len(sys.argv) > 8 else [round(0.1 * i, 1) for i in range(13)]
 rows = []
 for s in SIG:
     b = tasks.test_set("A", 32, s, n=n, namespace="comp")
@@ -46,6 +47,6 @@ for s in SIG:
                  "cum_rel_rms_lsb": st["cum_rel_rms"]})
     r = rows[-1]
     print(f"{mode:10s} A={A} B={B} sigma {s:.1f}  acc {acc:.3f}  bias {r['bias_lsb']:+.3f}  rms {r['rms_lsb']:.3f}  "
-          f"frozen {r['frozen']:.3f}  sub-LSB {r['sub_lsb']:.3f}  cum {r['cum_rms_lsb']:.2f} (rel {r['cum_rel_rms_lsb']:.2f})",
-          flush=True)
+          f"frozen {r['frozen']:.3f}  sub-LSB {r['sub_lsb']:.3f}  cum {r['cum_rms_lsb']:.2f} "
+          f"(rel {r['cum_rel_rms_lsb']:.2f})", flush=True)
 json.dump({"export": exp_path, "A": A, "B": B, "mode": mode, "n": n, "rows": rows}, open(out, "w"), indent=1)

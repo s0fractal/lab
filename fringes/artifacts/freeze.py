@@ -1,5 +1,6 @@
 """Freeze the runs behind the fringes README into a committed snapshot (post hoc play, not a confirmatory record).
-Usage: artifacts/freeze.py LAB SNAPSHOT_DIR   (run from fringes/; reads the ignored runs/, writes SNAPSHOT_DIR)
+Usage: artifacts/freeze.py LAB SNAPSHOT_DIR [REGEX]   (run from fringes/; reads the ignored runs/, writes SNAPSHOT_DIR;
+REGEX keeps only the runs/ paths it matches, for a snapshot of one later study)
 
 Every file gets its SHA-256, its role, the command that made it (relative to fringes/, LAB = the lab checkout) and a
 status: valid, superseded (a later run replaces it) or partly invalid (named fields wrong, the rest stands). The probe
@@ -19,6 +20,7 @@ import numpy as np
 import torch
 
 LAB, OUT = sys.argv[1], sys.argv[2]
+ONLY = re.compile(sys.argv[3]) if len(sys.argv) > 3 else None
 RUNS = "runs"
 CKPT = "{k}-T032-s{s}-step{step}.pt"
 F3 = {"fields_invalid": ["phi", "coh", "acc_unwound"],
@@ -113,6 +115,22 @@ SPECS = [
     (r"bits/round-.*\.json", "results/bits", "integer ring, round (first round checks)",
      lambda m: "intring.py LAB runs/js/<export>.json A A 256 <out> 1", None),
     (r"bits/sweep\.txt", "results/bits", "console log with state hashes", lambda m: "the floor sweep above", None),
+    (r"js/(soliton|pure)-(s90[12])\.json", "exports", "float export of seeds 901-902 for the rounding study",
+     lambda m: f"export_js.py LAB artifacts/pr7-2026-10-28/checkpoints/{m[1]}-T032-{m[2]}-step04000.pt runs/js/{m[0][3:]}",
+     None),
+    (r"rounding/((soliton|pure)-A(\d+)-B(\d+)-(floor|nearest|nearest\+p|stochastic|feedback))\.json", "results/rounding",
+     "rounding control, seed 900 (README: rounding instead of noise)",
+     lambda m: f"rounding.py LAB artifacts/pr7-2026-10-28/exports/{m[2]}.json {m[3]} {m[4]} {m[5]} "
+               f"runs/rounding/{m[1]}.json 512", None),
+    (r"rounding/((soliton|pure)-A(\d+)-B(\d+)-dither([\d.]+))\.json", "results/rounding", "dither-width scan, seed 900",
+     lambda m: f"rounding.py LAB artifacts/pr7-2026-10-28/exports/{m[2]}.json {m[3]} {m[4]} dither:{m[5]} "
+               f"runs/rounding/{m[1]}.json 512", None),
+    (r"rounding/(((soliton|pure)-s90[12])-A(\d+)-B(\d+)-(nearest|stochastic|feedback))\.json", "results/rounding",
+     "rounding control, seeds 901-902",
+     lambda m: f"rounding.py LAB runs/js/{m[2]}.json {m[4]} {m[5]} {m[6]} runs/rounding/{m[1]}.json 512", None),
+    (r"rounding/(cum-(soliton|pure)-A(\d+)-(.+))\.json", "results/rounding", "rerun with the accumulated rounding error",
+     lambda m: f"rounding.py LAB artifacts/pr7-2026-10-28/exports/{m[2]}.json {m[3]} {m[3]} "
+               f"{m[4].replace('dither', 'dither:')} runs/rounding/{m[1]}.json 512", None),
     (r"(train-(?:soliton|pure)(?:-90[12])?|homeoarch-s\d+|golden-(?:q0|q21|qp-s90\d)|qat-(?:soliton|pure)-A\d)\.log",
      "logs", "training log (loss and accuracy every 100 steps)", lambda m: "the training command of the checkpoint",
      None),
@@ -130,6 +148,8 @@ def main():
     for path in sorted(glob.glob(f"{RUNS}/**/*", recursive=True)):
         rel = os.path.relpath(path, RUNS)
         if os.path.isdir(path) or rel.startswith(("ci", "verify")) or "case" in rel or "smoke" in rel:
+            continue
+        if ONLY and not ONLY.search(rel):
             continue
         for pat, dest, role, made_by, status in SPECS:
             m = re.fullmatch(pat, rel)

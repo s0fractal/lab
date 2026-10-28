@@ -1,6 +1,8 @@
 """Check a frozen snapshot and replay results from its weights, without training (post hoc play).
 Usage: artifacts/verify.py SNAPSHOT_DIR [--full | --bite | --only STAGE,...]   (uses the phs-soliton venv's python)
 
+A stage runs when its inputs are in the snapshot; a checkpoint or export it needs may live in a sibling snapshot
+(the rounding study reuses the checkpoints and seed-900 exports of pr7-2026-10-28).
   hashes    every file in MANIFEST.json is there with its size and SHA-256, and nothing else is
   ckpts     every checkpoint loads and carries the kind, T, seed and step the manifest says
   exports   export_js.py regenerates each frozen export from its frozen checkpoint: every number within
@@ -16,11 +18,13 @@ Usage: artifacts/verify.py SNAPSHOT_DIR [--full | --bite | --only STAGE,...]   (
             reproduces acc_fixed and acc_probe of results/probe2-soliton-4000; --full adds Pure and sigma 0.5, 0.8.
             Bit-equal on the machine that made it; elsewhere float kernels may differ in the last bits, so a gap of
             up to 2 sequences in 4096 is reported and accepted, more fails; a nonfinite accuracy fails.
+  rounding  rounding.py replays Soliton A = 7 stochastic and Pure A = 6 nearest at sigma = 0 and 0.2 from the seed-900
+            exports: accuracy exactly, the phase-step statistics to 1e-9 relative (integer dynamics, the statistics
+            are float sums of integers); --full adds Soliton A = 7 feedback and Pure A = 6 stochastic
   --bite    the check must be able to fail, on copies with the manifest updated to match each change: one flipped
-            byte (manifest left alone) must fail the hashes; a frozen integer result moved by one sequence must fail
-            the replay; exports whose kappa is NaN, +inf, -inf, the literal 1e400 (a float parser makes it inf) or
-            1e6 must each fail while the untouched exports pass; a NaN frozen probe accuracy must fail its row while
-            the other row passes
+            byte (manifest left alone) must fail the hashes; a frozen result moved by one sequence must fail its
+            replay; poisoned numbers (NaN, +inf, -inf, the literal 1e400 that a float parser makes inf, a large finite
+            value) in exports and results must each fail while the untouched ones pass
 Scratch output goes to fringes/runs/verify (ignored)."""
 import hashlib
 import json
@@ -39,69 +43,125 @@ FULL = "--full" in sys.argv
 ONLY = sys.argv[sys.argv.index("--only") + 1].split(",") if "--only" in sys.argv else None
 TMP = os.path.join(FR, "runs", "verify")
 os.makedirs(TMP, exist_ok=True)
+PR7 = os.path.join(HERE, "pr7-2026-10-28")
+
+# export name -> (checkpoint, export_js mode args); the checkpoint is looked up in this snapshot, then in pr7
+SRC = {"soliton": ("soliton-T032-s900-step04000.pt",), "pure": ("pure-T032-s900-step04000.pt",),
+       "golden": ("golden-qp-q21-N34-s900-step04000.pt", "qp", "21"), "homeo": ("homeoarch-s900-step04000.pt", "homeo")}
+for k in ("qat-soliton-A6", "qat-soliton-A7", "qat-pure-A7", "qat-pure-A8"):
+    SRC[k] = (f"{k}-s900-step04000.pt",)
+for k in ("soliton", "pure"):
+    for s in ("s901", "s902"):
+        SRC[f"{k}-{s}"] = (f"{k}-T032-{s}-step04000.pt",)
+# rounding replays: (model, bits, mode) -> frozen result; the export is the seed-900 one of pr7
+ROUND = [("soliton", 7, "stochastic"), ("pure", 6, "nearest")]
+ROUND_FULL = [("soliton", 7, "feedback"), ("pure", 6, "stochastic")]
+
+
+def find(*parts):
+    """A file of this snapshot, or of pr7 when this snapshot reuses it."""
+    for root in (SNAP, PR7):
+        p = os.path.join(root, *parts)
+        if os.path.exists(p):
+            return p
+    return None
+
+
+def is_num(v):
+    return isinstance(v, (int, float)) and not isinstance(v, bool)
+
+
+def finite(*vals):
+    return all(is_num(v) and math.isfinite(v) for v in vals)
+
+
+def rehash(snap, paths):
+    m = json.load(open(os.path.join(snap, "MANIFEST.json")))
+    for row in m["files"]:
+        if row["path"] in paths:
+            f = os.path.join(snap, row["path"])
+            row.update(bytes=os.path.getsize(f), sha256=hashlib.sha256(open(f, "rb").read()).hexdigest())
+    json.dump(m, open(os.path.join(snap, "MANIFEST.json"), "w"))
+
+
+def poison_json(path, setter, raw=None):
+    """Apply setter(d) to the JSON at path; raw replaces the placeholder "__RAW__" by a literal such as 1e400."""
+    d = json.load(open(path))
+    setter(d)
+    text = json.dumps(d, separators=(",", ":"))
+    open(path, "w").write(text.replace('"__RAW__"', raw) if raw else text)
 
 
 def bite():
-    """Doctor two copies of the snapshot; verify must refuse both."""
+    """Doctor copies of the snapshot; verify must refuse each, and must still pass what was not touched."""
+    files = {f["path"] for f in json.load(open(os.path.join(SNAP, "MANIFEST.json")))["files"]}
+    rounding = "results/rounding/soliton-A7-B7-stochastic.json" in files
+
     def doctored(name):
         d = os.path.join(TMP, name)
         shutil.rmtree(d, ignore_errors=True)
         shutil.copytree(SNAP, d)
         return d
+    plans = []
     a = doctored("bite-byte")
-    f = os.path.join(a, "results", "collapse.json")
-    raw = bytearray(open(f, "rb").read())
+    target = "results/collapse.json" if "results/collapse.json" in files else sorted(p for p in files
+                                                                                     if p.startswith("results/"))[0]
+    raw = bytearray(open(os.path.join(a, target), "rb").read())
     raw[len(raw) // 2] ^= 1
-    open(f, "wb").write(raw)
+    open(os.path.join(a, target), "wb").write(raw)
+    plans.append((a, "hashes", [], []))
+
     b = doctored("bite-result")
-    f = os.path.join(b, "results", "bits-round", "soliton-A8-B8.json")
-    d = json.load(open(f))
-    d["acc"][0] += 1 / 256
-    json.dump(d, open(f, "w"))
-    m = json.load(open(os.path.join(b, "MANIFEST.json")))
-    for row in m["files"]:
-        if row["path"] == "results/bits-round/soliton-A8-B8.json":
-            row.update(bytes=os.path.getsize(f), sha256=hashlib.sha256(open(f, "rb").read()).hexdigest())
-    json.dump(m, open(os.path.join(b, "MANIFEST.json"), "w"))
+    if rounding:
+        moved = "results/rounding/soliton-A7-B7-stochastic.json"
+        poison_json(os.path.join(b, moved), lambda d: d["rows"][0].__setitem__("acc", d["rows"][0]["acc"] + 1 / 512))
+        only = "hashes,rounding"
+    else:
+        moved = "results/bits-round/soliton-A8-B8.json"
+        poison_json(os.path.join(b, moved), lambda d: d["acc"].__setitem__(0, d["acc"][0] + 1 / 256))
+        only = "hashes,integer"
+    rehash(b, [moved])
+    plans.append((b, only, [], []))
+
     c = doctored("bite-nonfinite")
-    poison = {"qat-pure-A8": float("nan"), "qat-pure-A7": float("inf"), "qat-soliton-A7": float("-inf"),
-              "qat-soliton-A6": "1e400", "golden": 1e6}
-    changed = []
+    if rounding:
+        poison = {"pure-s901": float("nan"), "pure-s902": float("inf"), "soliton-s901": "1e400"}
+        controls = ["soliton-s902"]
+        result = "results/rounding/pure-A6-B6-nearest.json"
+        poison_json(os.path.join(c, result), lambda d: d["rows"][0].__setitem__("acc", float("nan")))
+        want_rows = ["BAD rounding pure A=6 nearest sigma 0.00", "ok  rounding pure A=6 nearest sigma 0.20",
+                     "ok  rounding soliton A=7 stochastic sigma 0.00"]
+        only = "hashes,exports,rounding"
+    else:
+        poison = {"qat-pure-A8": float("nan"), "qat-pure-A7": float("inf"), "qat-soliton-A7": float("-inf"),
+                  "qat-soliton-A6": "1e400", "golden": 1e6}
+        controls = ["soliton", "pure", "homeo"]
+        result = "results/probe2-soliton-4000.json"
+        poison_json(os.path.join(c, result), lambda d: next(r for r in d["rows"] if abs(r["sigma"] - 0.7) < 1e-9)
+                    .__setitem__("acc_probe", float("nan")))
+        want_rows = ["BAD float soliton sigma 0.70", "ok  float soliton sigma 0.00"]
+        only = "hashes,exports,float"
     for name, v in poison.items():
-        f = os.path.join(c, "exports", f"{name}.json")
-        d = json.load(open(f))
-        d["kappa"] = "__RAW__" if isinstance(v, str) else v
-        text = json.dumps(d, separators=(",", ":"))
-        open(f, "w").write(text.replace('"__RAW__"', v) if isinstance(v, str) else text)
-        changed.append(f"exports/{name}.json")
-    f = os.path.join(c, "results", "probe2-soliton-4000.json")
-    d = json.load(open(f))
-    next(r for r in d["rows"] if abs(r["sigma"] - 0.7) < 1e-9)["acc_probe"] = float("nan")
-    json.dump(d, open(f, "w"))
-    changed.append("results/probe2-soliton-4000.json")
-    for snap, paths in ((b, ["results/bits-round/soliton-A8-B8.json"]), (c, changed)):
-        m = json.load(open(os.path.join(snap, "MANIFEST.json")))
-        for row in m["files"]:
-            if row["path"] in paths:
-                f = os.path.join(snap, row["path"])
-                row.update(bytes=os.path.getsize(f), sha256=hashlib.sha256(open(f, "rb").read()).hexdigest())
-        json.dump(m, open(os.path.join(snap, "MANIFEST.json"), "w"))
+        poison_json(os.path.join(c, "exports", f"{name}.json"),
+                    lambda d, v=v: d.__setitem__("kappa", "__RAW__" if isinstance(v, str) else v),
+                    v if isinstance(v, str) else None)
+    rehash(c, [f"exports/{n}.json" for n in poison] + [result])
+    want = [f"BAD export {n} " for n in poison] + [f"ok  export {n} " for n in controls] + want_rows + ["ok  SHA-256"]
+    plans.append((c, only, want, list(poison)))
+
     failed = []
-    for d, only in ((a, "hashes"), (b, "hashes,integer"), (c, "hashes,exports,float")):
+    for d, only, want, _ in plans:
         r = subprocess.run([PY, os.path.abspath(__file__), d, "--only", only], capture_output=True, text=True)
         lines = r.stdout.strip().splitlines()
-        ok = r.returncode != 0
-        if d == c:   # every poisoned value refused, every untouched export and the other probe row still pass
-            want = [f"BAD export {n} " for n in poison] + [f"ok  export {n} " for n in ("soliton", "pure", "homeo")]
-            want += ["BAD float soliton sigma 0.70", "ok  float soliton sigma 0.00", "ok  SHA-256"]
-            missing = [w for w in want if not any(ln.startswith(w) for ln in lines)]
-            ok = ok and not missing
+        missing = [w for w in want if not any(ln.startswith(w) for ln in lines)]
+        ok = r.returncode != 0 and not missing
+        if want:
             for ln in lines:
                 if ln.startswith("BAD"):
                     print(f"      {ln}")
             if missing:
                 print(f"      missing: {missing}")
-        print(f"{'ok ' if ok else 'BAD'} bite {os.path.basename(d)}: {lines[-1]}")
+        print(f"{'ok ' if ok else 'BAD'} bite {os.path.basename(d)}: {lines[-1] if lines else r.stderr[-300:]}")
         if not ok:
             failed.append(d)
         shutil.rmtree(d)
@@ -132,39 +192,6 @@ def stage(name):
     return ONLY is None or name in ONLY
 
 
-# hashes
-if stage("hashes"):
-    on_disk = {os.path.relpath(os.path.join(d, n), SNAP) for d, _, ns in os.walk(SNAP) for n in ns} - {"MANIFEST.json",
-                                                                                                        "README.md"}
-    check(on_disk == set(by_path), f"file set: {len(by_path)} in the manifest, {len(on_disk)} on disk, "
-          f"extra {sorted(on_disk - set(by_path))[:3]}, missing {sorted(set(by_path) - on_disk)[:3]}")
-    wrong = [p for p, f in by_path.items() if p in on_disk and (os.path.getsize(os.path.join(SNAP, p)) != f["bytes"] or
-             hashlib.sha256(open(os.path.join(SNAP, p), "rb").read()).hexdigest() != f["sha256"])]
-    check(not wrong, f"SHA-256 and size of {len(by_path)} files" + (f", wrong: {wrong[:3]}" if wrong else ""))
-
-# checkpoints
-if stage("ckpts"):
-    r = run("-c", "\n".join([
-        "import json, sys, torch",
-        "man, snap = json.load(open(sys.argv[1])), sys.argv[2]",
-        "for f in man['files']:",
-        "    if f['path'].endswith('.pt'):",
-        "        c = torch.load(snap + '/' + f['path'])",
-        "        assert all(c[k] == f[k] for k in ('kind', 'T', 'seed', 'step')), f['path']"]),
-        os.path.join(SNAP, "MANIFEST.json"), SNAP)
-    check(r.returncode == 0, "every checkpoint loads with the manifest's kind, T, seed and step")
-
-# exports from checkpoints
-SRC = {"soliton": ("soliton-T032-s900-step04000.pt",), "pure": ("pure-T032-s900-step04000.pt",),
-       "golden": ("golden-qp-q21-N34-s900-step04000.pt", "qp", "21"), "homeo": ("homeoarch-s900-step04000.pt", "homeo")}
-for k in ("qat-soliton-A6", "qat-soliton-A7", "qat-pure-A7", "qat-pure-A8"):
-    SRC[k] = (f"{k}-s900-step04000.pt",)
-
-
-def is_num(v):
-    return isinstance(v, (int, float)) and not isinstance(v, bool)
-
-
 def worst(a, b, path=""):
     """(excess over tolerance, path, gap) of the worst number; a structure mismatch, a non-number against a float
     and a NaN or infinity on either side are infinite, so the excess is never NaN and max() cannot drop it."""
@@ -179,7 +206,7 @@ def worst(a, b, path=""):
     if isinstance(a, float) or isinstance(b, float):
         if not (is_num(a) and is_num(b)):
             return (float("inf"), path, "not a number")
-        if not (math.isfinite(a) and math.isfinite(b)):
+        if not finite(a, b):
             return (float("inf"), path, f"nonfinite {a} vs {b}")
         gap = abs(a - b)
         tol = 1e-3 if path.startswith("/ref") else 2e-6 + 1e-5 * max(abs(a), abs(b))
@@ -188,10 +215,39 @@ def worst(a, b, path=""):
     return (0.0 if a == b else float("inf"), path, "differs")
 
 
+# hashes
+if stage("hashes"):
+    on_disk = {os.path.relpath(os.path.join(d, n), SNAP) for d, _, ns in os.walk(SNAP) for n in ns} - {"MANIFEST.json",
+                                                                                                        "README.md"}
+    check(on_disk == set(by_path), f"file set: {len(by_path)} in the manifest, {len(on_disk)} on disk, "
+          f"extra {sorted(on_disk - set(by_path))[:3]}, missing {sorted(set(by_path) - on_disk)[:3]}")
+    wrong = [p for p, f in by_path.items() if p in on_disk and (os.path.getsize(os.path.join(SNAP, p)) != f["bytes"] or
+             hashlib.sha256(open(os.path.join(SNAP, p), "rb").read()).hexdigest() != f["sha256"])]
+    check(not wrong, f"SHA-256 and size of {len(by_path)} files" + (f", wrong: {wrong[:3]}" if wrong else ""))
+
+# checkpoints
+if stage("ckpts") and any(p.endswith(".pt") for p in by_path):
+    r = run("-c", "\n".join([
+        "import json, sys, torch",
+        "man, snap = json.load(open(sys.argv[1])), sys.argv[2]",
+        "for f in man['files']:",
+        "    if f['path'].endswith('.pt'):",
+        "        c = torch.load(snap + '/' + f['path'])",
+        "        assert all(c[k] == f[k] for k in ('kind', 'T', 'seed', 'step')), f['path']"]),
+        os.path.join(SNAP, "MANIFEST.json"), SNAP)
+    check(r.returncode == 0, "every checkpoint loads with the manifest's kind, T, seed and step")
+
+# exports from checkpoints
 if stage("exports"):
     for name, (ck, *mode) in SRC.items():
+        if f"exports/{name}.json" not in by_path:
+            continue
+        ckpt = find("checkpoints", ck)
+        if ckpt is None:
+            check(False, f"export {name}: checkpoint {ck} is in neither snapshot")
+            continue
         out = os.path.join(TMP, f"{name}.json")
-        r = run("-I", "export_js.py", LAB, os.path.join(SNAP, "checkpoints", ck), out, *mode)
+        r = run("-I", "export_js.py", LAB, ckpt, out, *mode)
         if r.returncode:
             check(False, f"export {name}")
             continue
@@ -201,7 +257,7 @@ if stage("exports"):
               else f"export {name} regenerates from {ck} ({w[1]}: {w[2]})")
 
 # integer replay
-if stage("integer"):
+if stage("integer") and "results/bits-round/soliton-A8-B8.json" in by_path:
     INT = [("soliton", 8, 8, 1, "bits-round/soliton-A8-B8.json")]
     if FULL:
         INT.append(("pure", 8, 8, 0, "bits/pure-A8-B8.json"))
@@ -209,12 +265,11 @@ if stage("integer"):
         out = os.path.join(TMP, f"int-{name}-A{A}-B{B}-r{rnd}.json")
         r = run("-I", "intring.py", LAB, os.path.join(SNAP, "exports", f"{name}.json"), str(A), str(B), "256", out, str(rnd))
         got, want = json.load(open(out))["acc"], json.load(open(os.path.join(SNAP, "results", ref)))["acc"]
-        finite = all(is_num(v) and math.isfinite(v) for v in got + want)
-        check(r.returncode == 0 and finite and got == want,
+        check(r.returncode == 0 and finite(*got, *want) and got == want,
               f"integer ring {name} A={A} B={B} rnd={rnd} reproduces {ref} exactly (Acc(0) {got[0]:.3f})")
 
 # float replay
-if stage("float"):
+if stage("float") and "results/probe2-soliton-4000.json" in by_path:
     FLOAT = [("soliton", "0.0,0.7")] + ([("soliton", "0.0,0.5,0.8"), ("pure", "0.0,0.7")] if FULL else [])
     for kind, sig in FLOAT:
         out = os.path.join(TMP, f"probe-{kind}-{sig.replace(',', '_')}.json")
@@ -227,12 +282,29 @@ if stage("float"):
                                                                               f"probe2-{kind}-4000.json")))["rows"]}
         for row in json.load(open(out))["rows"]:
             w = want[round(row["sigma"], 2)]
-            vals = [row[k] for k in ("acc_fixed", "acc_probe")] + [w[k] for k in ("acc_fixed", "acc_probe")]
-            finite = all(is_num(v) and math.isfinite(v) for v in vals)
-            gap = max(abs(row[k] - w[k]) * 4096 for k in ("acc_fixed", "acc_probe")) if finite else float("inf")
+            ok = finite(*(row[k] for k in ("acc_fixed", "acc_probe")), *(w[k] for k in ("acc_fixed", "acc_probe")))
+            gap = max(abs(row[k] - w[k]) * 4096 for k in ("acc_fixed", "acc_probe")) if ok else float("inf")
             check(gap <= 2, f"float {kind} sigma {row['sigma']:.2f}: acc_fixed {row['acc_fixed']:.4f} "
                   f"(frozen {w['acc_fixed']:.4f}), acc_probe {row['acc_probe']:.4f} (frozen {w['acc_probe']:.4f}), "
                   f"gap {gap:.0f} of 4096")
+
+# rounding replay
+if stage("rounding") and any(p.startswith("results/rounding/") for p in by_path):
+    for m, b, mode in ROUND + (ROUND_FULL if FULL else []):
+        ref = f"results/rounding/{m}-A{b}-B{b}-{mode}.json"
+        frozen = {round(r["sigma"], 2): r for r in json.load(open(os.path.join(SNAP, ref)))["rows"]}
+        out = os.path.join(TMP, f"rounding-{m}-A{b}-{mode}.json")
+        r = run("rounding.py", LAB, find("exports", f"{m}.json"), str(b), str(b), mode, out, "512", "0.0,0.2")
+        if r.returncode:
+            check(False, f"rounding {m} A={b} {mode}")
+            continue
+        for row in json.load(open(out))["rows"]:
+            w = frozen[round(row["sigma"], 2)]
+            keys = [k for k in w if k != "sigma"]
+            ok = all(k in row and finite(row[k], w[k]) for k in keys)
+            ok = ok and row["acc"] == w["acc"] and all(abs(row[k] - w[k]) <= 1e-9 * max(1.0, abs(w[k])) for k in keys)
+            check(ok, f"rounding {m} A={b} {mode} sigma {row['sigma']:.2f}: acc {row['acc']:.4f} "
+                  f"(frozen {w['acc']:.4f}), bias {row['bias_lsb']:+.4f}, frozen steps {row['frozen']:.4f}")
 
 print(f"verify {man['snapshot']}: {'FAILED: ' + '; '.join(bad) if bad else 'ok'}")
 sys.exit(1 if bad else 0)
