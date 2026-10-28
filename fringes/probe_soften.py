@@ -28,27 +28,32 @@ model.load_state_dict(c["state"])
 T, mp = c["T"], model.core.m_pin
 
 
+SIGMAS = [round(0.05 * i, 2) for i in range(25)]
+
+
 @torch.no_grad()
-def hold_end(sigma):
-    b = tasks.test_set("A", T, sigma, n=n, namespace="play")
-    x, tg, sg = to_torch(b)
-    gen = torch.Generator().manual_seed(tasks.derive_seed("playnoise", T, f"{sigma:.2f}"))
+def hold_end():
+    """Every sigma cell in one batch (sigma is per sequence); state after token T-2."""
+    bs = [to_torch(tasks.test_set("A", T, s, n=n, namespace="play")) for s in SIGMAS]
+    x, sg = torch.cat([b[0] for b in bs]), torch.cat([b[2] for b in bs])
+    B = x.shape[0]
+    gen = torch.Generator().manual_seed(17)
     core, phys = model.core, model.core.physics()
     G = core.rotation(phys)
     c1, c2 = core.ou_coefficients(sg)
-    theta = torch.zeros(n, model.N, model.d)
+    theta = torch.zeros(B, model.N, model.d)
     P = torch.zeros_like(theta)
     f = internal_force(theta, phys)
     for t in range(T - 1):
         tok = x[:, t]
         drive = Drive(phi=wrap(model.E_phi[tok]), u=model.u_max * torch.sigmoid(model.E_u[tok]))
         theta, P, f = core.token(theta, P, f, phys, G, drive, c1, c2, gen)
-    return theta.double(), P.double()
+    return theta.double().reshape(len(SIGMAS), n, model.N, model.d), P.double().reshape(len(SIGMAS), n, model.N, model.d)
 
 
+TH, PP = hold_end()
 rows = []
-for s in [round(0.05 * i, 2) for i in range(25)]:
-    th, P = hold_end(s)
+for s, th, P in zip(SIGMAS, TH, PP):
     d = th.shape[-1]
     cs, sn = torch.cos(th), torch.sin(th)
     Cij = (cs @ cs.transpose(-1, -2) + sn @ sn.transpose(-1, -2)) / d
