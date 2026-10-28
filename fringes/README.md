@@ -280,7 +280,7 @@ python -I fringe_scan.py ../phs-soliton
 ./battery.sh 4000
 ```
 
-Свіжі прогони пишуть у ignored `runs/`. Ваги й результати, на яких стоїть цей README, заморожено в `artifacts/pr7-2026-10-28/` (див. його README). Перегенерований файл можна звірити з його хешем у `MANIFEST.json`. Чи відтворює повторне навчання checkpoint побітово, не перевірено.
+Свіжі прогони пишуть у ignored `runs/`. Ваги й результати, на яких стоїть цей README, заморожено в `artifacts/pr7-2026-10-28/` (див. його README). Перегенерований файл можна звірити з його хешем у `MANIFEST.json`. Перенавчання 1000 кроків (Soliton seed 900, Pure seed 901) дало побітово ті самі checkpoints, з тим самим SHA-256. Це перевірено на тій самій машині, з тією самою збіркою torch і кількістю потоків.
 
 ```bash
 ../phs-soliton/.venv/bin/python artifacts/verify.py artifacts/pr7-2026-10-28
