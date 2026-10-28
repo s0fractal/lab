@@ -8,7 +8,7 @@ binary, case_path = sys.argv[1], sys.argv[2]
 cs = json.load(open(case_path))
 e = cs["export"]
 out = [e["A"], e["B"], e["F"], e["N"], e["d"], e["S"], e["V"], int(e["mode"] == "homeo"), int(e["lattice"]), e["m_pin"],
-       e["EXP_RANGE"], e["EXP_STEP"], e["h2"], e["c1"], e["c2u"], e["kappa"], e["g_lat"], e["g_pin"], e["ema"], e["ph_mul"]]
+       e["EXP_RANGE"], e["EXP_STEP"], e.get("rnd", 0), e["h2"], e["c1"], e["c2u"], e["kappa"], e["g_lat"], e["g_pin"], e["ema"], e["ph_mul"]]
 out += e["SIN"] + e["EXP"] + e["invm"] + e["sqm"] + e["G"] + [len(e["phi"])] + e["phi"] + e["u"] + e["psi"] + e["W"] + e["b"]
 out += [cs["seed"], len(cs["seqs"]), len(cs["seqs"][0]["x"])]
 for s in cs["seqs"]:

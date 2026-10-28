@@ -14,7 +14,7 @@ typedef int64_t i64;
 static i64 fshift(i64 a, int k) { return a >= 0 ? (a >> k) : -((-a + ((i64)1 << k) - 1) >> k); }
 static i64 fdiv(i64 a, i64 b) { i64 q = a / b; if ((a % b) != 0 && ((a < 0) != (b < 0))) q -= 1; return q; }
 
-static int A, B, F, N, D, S, V, homeo, lattice, m_pin, EXP_RANGE, EXP_STEP, nphi;
+static int A, B, F, N, D, S, V, homeo, lattice, m_pin, EXP_RANGE, EXP_STEP, nphi, rnd;
 static i64 h2, c1, c2u, kappa, g_lat, g_pin, ema, ph_mul;
 static i64 *SIN, *EXP, *invm, *sqm, *G, *phi, *u, *psi, *W, *b;
 
@@ -74,7 +74,7 @@ int main(int argc, char **argv) {
   FILE *f = argc > 1 ? fopen(argv[1], "r") : stdin;
   if (!f) { perror("open"); return 2; }
   A = rd(f); B = rd(f); F = rd(f); N = rd(f); D = rd(f); S = rd(f); V = rd(f); homeo = rd(f); lattice = rd(f);
-  m_pin = rd(f); EXP_RANGE = rd(f); EXP_STEP = rd(f);
+  m_pin = rd(f); EXP_RANGE = rd(f); EXP_STEP = rd(f); rnd = (int)rd(f);
   h2 = rd(f); c1 = rd(f); c2u = rd(f); kappa = rd(f); g_lat = rd(f); g_pin = rd(f); ema = rd(f); ph_mul = rd(f);
   SIN = rdv(f, 1 << B); EXP = rdv(f, (EXP_RANGE << EXP_STEP) + 1);
   invm = rdv(f, N); sqm = rdv(f, N); G = rdv(f, N * N);
@@ -110,7 +110,7 @@ int main(int argc, char **argv) {
       for (int sub = 0; sub < S; sub++) {
         for (int e = 0; e < Nd; e++) P[e] += mul(h2, fo[e]);
         rotate(P, tmp);
-        for (int e = 0; e < Nd; e++) th[e] = (th[e] + fshift(mul(h2, mul(invm[e / D], P[e])) * ph_mul, 20)) & mask;
+        for (int e = 0; e < Nd; e++) th[e] = (th[e] + fshift(mul(h2, mul(invm[e / D], P[e])) * ph_mul + ((i64)rnd << 19), 20)) & mask;
         for (int e = 0; e < Nd; e++) {
           i64 acc = 0;
           for (int r = 0; r < 4; r++) {
@@ -120,7 +120,7 @@ int main(int argc, char **argv) {
           if (F < 16) xi = fshift(xi, 16 - F);
           P[e] = mul(c1, P[e]) + mul(c2, mul(sqm[e / D], xi));
         }
-        for (int e = 0; e < Nd; e++) th[e] = (th[e] + fshift(mul(h2, mul(invm[e / D], P[e])) * ph_mul, 20)) & mask;
+        for (int e = 0; e < Nd; e++) th[e] = (th[e] + fshift(mul(h2, mul(invm[e / D], P[e])) * ph_mul + ((i64)rnd << 19), 20)) & mask;
         force(th, gpin, fo, c, s, Am);
         for (int e = 0; e < Nd; e++) fo[e] -= mul(uu[e], sinI(th[e] - ph[e]));
         rotate(P, tmp);

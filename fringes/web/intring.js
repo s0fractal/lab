@@ -9,7 +9,7 @@ const IntRing = (() => {
     const L = (a) => Float64Array.from(a);
     return { ...j, SIN: L(j.SIN), EXP: L(j.EXP), invm: L(j.invm), sqm: L(j.sqm), G: L(j.G), phi: L(j.phi), u: L(j.u),
       psi: L(j.psi), W: L(j.W), b: L(j.b), Nd: j.N * j.d, mask: P2(j.A) - 1, Lm: P2(j.B) - 1, sh: P2(j.A - j.B),
-      expMax: j.EXP_RANGE * P2(j.EXP_STEP), floor03: Math.trunc(0.3 * P2(j.F)) };
+      expMax: j.EXP_RANGE * P2(j.EXP_STEP), floor03: Math.trunc(0.3 * P2(j.F)), rndAdd: (j.rnd ?? 0) * P2(19) };
   }
 
   function makeRun(R) {
@@ -88,7 +88,7 @@ const IntRing = (() => {
         for (let sub = 0; sub < R.S; sub++) {
           for (let x = 0; x < Nd; x++) P[x] += mul(R.h2, f[x]);
           rotate(P);
-          for (let x = 0; x < Nd; x++) th[x] = (th[x] + fl(mul(R.h2, mul(R.invm[(x / d) | 0], P[x])) * R.ph_mul, 20)) & R.mask;
+          for (let x = 0; x < Nd; x++) th[x] = (th[x] + fl(mul(R.h2, mul(R.invm[(x / d) | 0], P[x])) * R.ph_mul + R.rndAdd, 20)) & R.mask;
           for (let x = 0; x < Nd; x++) {
             let acc = 0;
             for (let k = 0; k < 4; k++) {
@@ -98,7 +98,7 @@ const IntRing = (() => {
             if (F < 16) xi = fl(xi, 16 - F);
             P[x] = mul(R.c1, P[x]) + mul(c2, mul(R.sqm[(x / d) | 0], xi));
           }
-          for (let x = 0; x < Nd; x++) th[x] = (th[x] + fl(mul(R.h2, mul(R.invm[(x / d) | 0], P[x])) * R.ph_mul, 20)) & R.mask;
+          for (let x = 0; x < Nd; x++) th[x] = (th[x] + fl(mul(R.h2, mul(R.invm[(x / d) | 0], P[x])) * R.ph_mul + R.rndAdd, 20)) & R.mask;
           force(th, gpin, f); drive();
           rotate(P);
           for (let x = 0; x < Nd; x++) P[x] += mul(R.h2, f[x]);

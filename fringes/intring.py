@@ -1,7 +1,8 @@
 """Integer ring (post hoc play): the trained PHS models run with no floating point in the dynamics, in the spirit of
 s0fractal/genesis omega_v2/src/math.rs (integer phase circle, sine LUT, xorshift, wrap by bitmask).
 
-  phase     theta in Z / 2^A (A state bits); the circle closes by the mask, so the winding number is an exact integer
+  phase     theta in Z / 2^A (A state bits); the circle closes by the mask, so the winding number is an exact integer;
+            a phase step is rounded half up (rnd = 1, default) or floored (rnd = 0: a -1/2 LSB drift per step, a seam)
   trig      sin/cos through a LUT of 2^B entries indexed by the top B bits of theta, values in Q(F)
   softmax   exp through a LUT on [-EXP_RANGE, 0] in steps of 2^-EXP_STEP, then an integer division
   numbers   momenta, forces, the Cayley rotation G, 1/m, sqrt(m), drives in Q(F); products are floored shifts
@@ -25,9 +26,10 @@ EXP_RANGE, EXP_STEP = 16, 10          # exp LUT: arguments -16..0 in steps of 2^
 
 
 class IntRing:
-    def __init__(self, export: dict, A: int = 24, B: int = 16, F: int = 16):
+    def __init__(self, export: dict, A: int = 24, B: int = 16, F: int = 16, rnd: int = 1):
         assert B <= A <= 30 and B <= 16 and F <= 16
         self.A, self.B, self.F = A, B, F
+        self.rnd = rnd                    # phase increment: 1 rounds half up (default), 0 floors (biased by -1/2 LSB)
         self.N, self.d, self.S = export["N"], export["d"], export["S"]
         self.mode = export["mode"]
         one = 1 << F
@@ -68,8 +70,9 @@ class IntRing:
         return self.SIN[((th >> (self.A - self.B)) + (1 << (self.B - 2))) & ((1 << self.B) - 1)]
 
     def rad_to_phase(self, x):
-        """x radians in Q(F) -> phase units (floored)."""
-        return (x * self.ph_mul) >> 20
+        """x radians in Q(F) -> phase units, floored (rnd = 0) or rounded half up (rnd = 1). Flooring a step smaller
+        than one LSB gives 0 or -1, a drift of -1/2 LSB per step that turns every phase together."""
+        return (x * self.ph_mul + (self.rnd << 19)) >> 20
 
     def force(self, th, gpin):
         F, N, d = self.F, self.N, self.d
@@ -152,7 +155,7 @@ class IntRing:
                 "c1": int(self.c1), "c2u": int(self.c2u), "invm": L(self.invm), "sqm": L(self.sqm), "G": L(self.G),
                 "kappa": int(self.kappa), "g_lat": int(self.g_lat), "g_pin": int(self.g_pin), "m_pin": self.m_pin,
                 "lattice": bool(self.lattice), "ema": int(self.ema), "phi": L(self.phi), "u": L(self.u), "psi": L(self.psi),
-                "W": L(self.W), "b": L(self.b), "ph_mul": self.ph_mul, "V": int(self.W.shape[0])}
+                "W": L(self.W), "b": L(self.b), "ph_mul": self.ph_mul, "V": int(self.W.shape[0]), "rnd": self.rnd}
 
 
 def state_hash(th, P):
@@ -176,16 +179,18 @@ def write_case(ring, path, name, n=24, seed=3):
 
 if __name__ == "__main__" and sys.argv[1] == "--case":
     exp_path, A, B, out = sys.argv[2], int(sys.argv[3]), int(sys.argv[4]), sys.argv[5]
-    write_case(IntRing(json.load(open(exp_path)), A=A, B=B), out, exp_path.split("/")[-1])
+    rnd = int(sys.argv[6]) if len(sys.argv) > 6 else 1
+    write_case(IntRing(json.load(open(exp_path)), A=A, B=B, rnd=rnd), out, exp_path.split("/")[-1])
     sys.exit(0)
 
 if __name__ == "__main__":
     LAB, exp_path = sys.argv[1], sys.argv[2]
     A, B = int(sys.argv[3]), int(sys.argv[4])
     n = int(sys.argv[5]) if len(sys.argv) > 5 else 512
+    rnd = int(sys.argv[7]) if len(sys.argv) > 7 else 1
     sys.path.insert(0, f"{LAB}/phs-soliton")
     from phs import tasks
-    ring = IntRing(json.load(open(exp_path)), A=A, B=B)
+    ring = IntRing(json.load(open(exp_path)), A=A, B=B, rnd=rnd)
     SIG = [round(0.1 * i, 1) for i in range(13)]
     bs = [tasks.test_set("A", 32, s, n=n, namespace="comp") for s in SIG]
     X = np.concatenate([b["x"] for b in bs]); Y = np.concatenate([b["targets"][:, -1] for b in bs])
@@ -193,6 +198,6 @@ if __name__ == "__main__":
     lg, th, P, w = ring.run(X, S, seed=3, record=True)
     acc = (lg.argmax(1) == Y).reshape(len(SIG), n).mean(1)
     if len(sys.argv) > 6:
-        json.dump({"acc": acc.tolist(), "sigma": SIG, "A": A, "B": B, "n": n}, open(sys.argv[6], "w"))
-    print(f"{exp_path.split('/')[-1]} A={A} B={B}: " + " ".join(f"{s:.1f}:{a:.2f}" for s, a in zip(SIG, acc))
+        json.dump({"acc": acc.tolist(), "sigma": SIG, "A": A, "B": B, "n": n, "rnd": rnd}, open(sys.argv[6], "w"))
+    print(f"{exp_path.split('/')[-1]} A={A} B={B} {'round' if rnd else 'floor'}: " + " ".join(f"{s:.1f}:{a:.2f}" for s, a in zip(SIG, acc))
           + f"  | hash {state_hash(th[:n], P[:n])} | max|Q| {int(np.abs(w).max())}")
