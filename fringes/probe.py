@@ -6,6 +6,7 @@
   phi, coh    memory phase: c^y_ik(sigma) = E[exp(i theta_ik) | y] - mean_y, the class signal of node i, channel k;
               phi = arg <c(sigma), c(0)>, coh = |<c(sigma), c(0)>| / (|c(sigma)| |c(0)|)
   acc_unwound the trained readout after the counter-rotation theta -> theta - phi(sigma) (P untouched)
+  zmeans      class means of z_T minus their mean over classes (7 x 3Nd), for the rotation plane in dial.py
 """
 import json
 import math
@@ -57,7 +58,7 @@ def class_signal(z, y, K=7):
     return m - m.mean(0, keepdim=True)
 
 
-sigmas = [round(0.1 * i, 2) for i in range(21)]
+sigmas = [round(0.05 * i, 2) for i in range(41)]
 rows, c0 = [], None
 for s in sigmas:
     z, logit, y = final_state(s)
@@ -79,6 +80,9 @@ for s in sigmas:
     row = {"sigma": s, "acc_fixed": float((logit.argmax(1) == y).double().mean()),
            "acc_probe": lda(z[:half], y[:half], z[half:], y[half:]), "phi": phi, "coh": coh,
            "acc_unwound": acc_unwound, "pred_shift": shift}
-    rows.append(row)
+    zm = torch.stack([z[y == k].mean(0) for k in range(7)])
+    row_z = (zm - zm.mean(0, keepdim=True)).round(decimals=5).tolist()
     print(json.dumps(row), flush=True)
+    row["zmeans"] = row_z
+    rows.append(row)
 json.dump({"ckpt": ckpt, "kind": c["kind"], "T": T, "step": c["step"], "n": n, "rows": rows}, open(out, "w"), indent=1)
