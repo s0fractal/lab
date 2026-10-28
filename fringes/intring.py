@@ -1,17 +1,22 @@
 """Integer ring (post hoc play): the trained PHS models run with no floating point in the dynamics, in the spirit of
 s0fractal/genesis omega_v2/src/math.rs (integer phase circle, sine LUT, xorshift, wrap by bitmask).
 
-  phase     theta in Z / 2^A (A state bits); the circle closes by the mask, so the winding number is an exact integer
+  phase     theta in Z / 2^A (A state bits); the circle closes by the mask, so the winding number is an exact integer;
+            a phase step is rounded half up (rnd = 1, default) or floored (rnd = 0: a -1/2 LSB drift per step, a seam)
   trig      sin/cos through a LUT of 2^B entries indexed by the top B bits of theta, values in Q(F)
   softmax   exp through a LUT on [-EXP_RANGE, 0] in steps of 2^-EXP_STEP, then an integer division
   numbers   momenta, forces, the Cayley rotation G, 1/m, sqrt(m), drives in Q(F); products are floored shifts
-  noise     xorshift32 per sequence; Gaussian by Irwin-Hall (sum of 4 uniforms of 16 bits), variance 1 exactly
+  noise     xorshift32 per sequence; Irwin-Hall (sum of 4 uniforms of 16 bits, centred, scaled by sqrt(3)): variance
+            1 up to the discrete centring, the rounded factor and the floors; a shared contract of the three runtimes,
+            not exactly Gaussian and not the torch OU noise
   readout   logits = W z with z in Q(F) (float only after the dynamics, for argmax and the bars)
 
 Two knobs: B, the resolution the trigonometry sees, and A, the resolution the state keeps. With A = B the state has no
 sub-step memory below one LUT step, as in genesis' 8-bit phase.
 Every operation is an integer operation on values below 2^53, so the JS port in web/intring.js reproduces it bit for
-bit (check with web/check_intring.js)."""
+bit (check with web/check_intring.js). The bound is measured, not assumed: with ring.track = True every product and
+accumulation records an upper bound of its magnitude in ring.peak (max|a| max|b|, times the length of a sum), and
+write_case refuses a case whose peak reaches 2^53."""
 from __future__ import annotations
 
 import hashlib
@@ -25,9 +30,10 @@ EXP_RANGE, EXP_STEP = 16, 10          # exp LUT: arguments -16..0 in steps of 2^
 
 
 class IntRing:
-    def __init__(self, export: dict, A: int = 24, B: int = 16, F: int = 16):
+    def __init__(self, export: dict, A: int = 24, B: int = 16, F: int = 16, rnd: int = 1):
         assert B <= A <= 30 and B <= 16 and F <= 16
         self.A, self.B, self.F = A, B, F
+        self.rnd = rnd                    # phase increment: 1 rounds half up (default), 0 floors (biased by -1/2 LSB)
         self.N, self.d, self.S = export["N"], export["d"], export["S"]
         self.mode = export["mode"]
         one = 1 << F
@@ -56,9 +62,17 @@ class IntRing:
         self.W, self.b = q(np.asarray(export["W"]).reshape(len(export["b"]), -1)), q(export["b"])
         # phase increment: dtheta[phase units] = (h/2 * invm * P) [Q(F) radians] * 2^A / (2 pi) / 2^F, via a Q20 factor
         self.ph_mul = int(round((1 << A) / (2 * math.pi) * 2 ** -F * (1 << 20)))   # Q20 multiplier
+        self.track, self.peak = False, 0
+
+    def _bound(self, a, b, k=1, add=0):
+        """Record an upper bound of |a * b| summed over k terms (+ |add|), as exact Python integers."""
+        if self.track:
+            m = lambda v: int(np.max(np.abs(np.asarray(v, dtype=np.int64)))) if np.size(v) else 0  # noqa: E731
+            self.peak = max(self.peak, k * m(a) * m(b) + m(add))
 
     # --- integer helpers (floor semantics everywhere) ---
     def mul(self, a, b):
+        self._bound(a, b)
         return (a * b) >> self.F
 
     def sin(self, th):
@@ -68,23 +82,30 @@ class IntRing:
         return self.SIN[((th >> (self.A - self.B)) + (1 << (self.B - 2))) & ((1 << self.B) - 1)]
 
     def rad_to_phase(self, x):
-        """x radians in Q(F) -> phase units (floored)."""
-        return (x * self.ph_mul) >> 20
+        """x radians in Q(F) -> phase units, floored (rnd = 0) or rounded half up (rnd = 1). Flooring a step smaller
+        than one LSB gives 0 or -1, a drift of -1/2 LSB per step that turns every phase together."""
+        self._bound(x, self.ph_mul, add=1 << 19)
+        return (x * self.ph_mul + (self.rnd << 19)) >> 20
 
     def force(self, th, gpin):
         F, N, d = self.F, self.N, self.d
         c, s = self.cos(th), self.sin(th)                               # (n, N, d) Q(F)
+        self._bound(c, c, 2 * d)
         C = (np.einsum("nik,njk->nij", c, c) + np.einsum("nik,njk->nij", s, s)) >> F
         C = C // d                                                      # Q(F), d = 2: exact shift
         z = self.mul(self.kappa, C)                                     # kappa C in Q(F)
         z = z - z.max(axis=2, keepdims=True)                            # <= 0
         idx = np.minimum((-z) >> (F - EXP_STEP), EXP_RANGE << EXP_STEP)
         e = self.EXP[idx]
+        self._bound(e, 1 << F, N)
         A = (e << F) // e.sum(axis=2, keepdims=True)                    # softmax rows, Q(F)
         As = (A + A.transpose(0, 2, 1)) >> 1
+        self._bound(As, c, N)
         ac = np.einsum("nij,njk->nik", As, c) >> F
         as_ = np.einsum("nij,njk->nik", As, s) >> F
-        f = -((self.kappa * (self.mul(s, ac) - self.mul(c, as_))) >> F) // d
+        ds = self.mul(s, ac) - self.mul(c, as_)
+        self._bound(self.kappa, ds)
+        f = -((self.kappa * ds) >> F) // d
         if self.lattice:
             fwd, bwd = np.roll(th, -1, axis=1) - th, th - np.roll(th, 1, axis=1)
             f = f + self.mul(self.g_lat, self.sin(fwd) - self.sin(bwd))
@@ -92,6 +113,7 @@ class IntRing:
         return f
 
     def rotate(self, P):
+        self._bound(self.G, P, self.N)
         return np.einsum("ij,njk->nik", self.G, P) >> self.F
 
     def run(self, x, sigma_q, seed=1, record=False):
@@ -100,6 +122,7 @@ class IntRing:
         F, N, d, mask = self.F, self.N, self.d, (1 << self.A) - 1
         th = np.zeros((n, N, d), np.int64)
         P = np.zeros((n, N, d), np.int64)
+        self._bound(self.c2u, sigma_q)
         c2 = (self.c2u * sigma_q) >> F                                     # Q(F), per sequence
         c2 = c2[:, None, None]
         # xorshift32 state per (sequence, node, channel): (seed * 2654435761 + i * 40503 + e * 2246822519 + 1) mod 2^32, odd
@@ -114,6 +137,7 @@ class IntRing:
             if self.mode == "homeo":
                 D = self.cos(self.m_pin * th).sum(axis=(1, 2)) // (N * d)
                 Dhat = D if t == 0 else Dhat + self.mul(self.ema, D - Dhat)
+                self._bound(self.g_pin, 1 << F)
                 gpin = ((self.g_pin << F) // np.maximum(Dhat, int(0.3 * (1 << F))))[:, None, None]
             tok = x[:, t]
             phi, u = self.phi[tok], self.u[tok]
@@ -129,6 +153,7 @@ class IntRing:
                     rng ^= rng >> np.uint32(17)
                     rng ^= rng << np.uint32(5)
                     acc += (rng >> np.uint32(16)).astype(np.int64)
+                self._bound(acc - (1 << 17), 113512)
                 xi = ((acc - (1 << 17)) * 113512) >> 16                  # sqrt(3) * 2^16 = 113512; Q16 Gaussian
                 xi = xi >> (16 - F) if F < 16 else xi
                 P = self.mul(self.c1, P) + self.mul(c2, self.mul(self.sqm, xi))
@@ -141,7 +166,8 @@ class IntRing:
                 bonds = ((np.roll(th, -1, axis=1) - th + half) & mask) - half
                 winding.append(bonds.sum(axis=1) >> self.A)              # exact integer, per channel
         z = np.concatenate([self.cos(th), self.sin(th), P], axis=2).reshape(n, -1)
-        logits = z @ self.W.T + (self.b << F)                            # exact, Q(2F)
+        self._bound(z, self.W, z.shape[1], add=self.b * (1 << F))
+        logits = z @ self.W.T + self.b * (1 << F)                        # exact, Q(2F)
         return logits, th, P, (np.stack(winding, 1) if record else None)
 
     def export(self) -> dict:
@@ -152,7 +178,7 @@ class IntRing:
                 "c1": int(self.c1), "c2u": int(self.c2u), "invm": L(self.invm), "sqm": L(self.sqm), "G": L(self.G),
                 "kappa": int(self.kappa), "g_lat": int(self.g_lat), "g_pin": int(self.g_pin), "m_pin": self.m_pin,
                 "lattice": bool(self.lattice), "ema": int(self.ema), "phi": L(self.phi), "u": L(self.u), "psi": L(self.psi),
-                "W": L(self.W), "b": L(self.b), "ph_mul": self.ph_mul, "V": int(self.W.shape[0])}
+                "W": L(self.W), "b": L(self.b), "ph_mul": self.ph_mul, "V": int(self.W.shape[0]), "rnd": self.rnd}
 
 
 def state_hash(th, P):
@@ -168,24 +194,30 @@ def write_case(ring, path, name, n=24, seed=3):
     x = np.concatenate([np.repeat(rs.integers(1, 8, size=(n, 1)), 2, 1), np.where(rs.random((n, 29)) < 0.25,
                         rs.integers(1, 8, size=(n, 29)), 0), np.full((n, 1), 8)], 1).astype(np.int64)
     sq = np.round(np.linspace(0, 1.2, n) * (1 << ring.F)).astype(np.int64)
+    ring.track, ring.peak = True, 0
     lg, th, P, _ = ring.run(x, sq, seed=seed)
+    ring.track = False
+    assert ring.peak < 1 << 53, f"{name}: an intermediate may reach 2^{math.log2(ring.peak):.1f}, beyond exact doubles"
     seqs = [{"x": x[k].tolist(), "sigmaQ": int(sq[k]), "th": th[k].ravel().tolist(), "P": P[k].ravel().tolist(),
              "logits": lg[k].tolist()} for k in range(n)]
-    json.dump({"name": name, "seed": seed, "export": ring.export(), "seqs": seqs}, open(path, "w"))
+    json.dump({"name": name, "seed": seed, "peak_bits": round(math.log2(max(ring.peak, 1)), 2), "export": ring.export(),
+               "seqs": seqs}, open(path, "w"))
 
 
 if __name__ == "__main__" and sys.argv[1] == "--case":
     exp_path, A, B, out = sys.argv[2], int(sys.argv[3]), int(sys.argv[4]), sys.argv[5]
-    write_case(IntRing(json.load(open(exp_path)), A=A, B=B), out, exp_path.split("/")[-1])
+    rnd = int(sys.argv[6]) if len(sys.argv) > 6 else 1
+    write_case(IntRing(json.load(open(exp_path)), A=A, B=B, rnd=rnd), out, exp_path.split("/")[-1])
     sys.exit(0)
 
 if __name__ == "__main__":
     LAB, exp_path = sys.argv[1], sys.argv[2]
     A, B = int(sys.argv[3]), int(sys.argv[4])
     n = int(sys.argv[5]) if len(sys.argv) > 5 else 512
+    rnd = int(sys.argv[7]) if len(sys.argv) > 7 else 1
     sys.path.insert(0, f"{LAB}/phs-soliton")
     from phs import tasks
-    ring = IntRing(json.load(open(exp_path)), A=A, B=B)
+    ring = IntRing(json.load(open(exp_path)), A=A, B=B, rnd=rnd)
     SIG = [round(0.1 * i, 1) for i in range(13)]
     bs = [tasks.test_set("A", 32, s, n=n, namespace="comp") for s in SIG]
     X = np.concatenate([b["x"] for b in bs]); Y = np.concatenate([b["targets"][:, -1] for b in bs])
@@ -193,6 +225,6 @@ if __name__ == "__main__":
     lg, th, P, w = ring.run(X, S, seed=3, record=True)
     acc = (lg.argmax(1) == Y).reshape(len(SIG), n).mean(1)
     if len(sys.argv) > 6:
-        json.dump({"acc": acc.tolist(), "sigma": SIG, "A": A, "B": B, "n": n}, open(sys.argv[6], "w"))
-    print(f"{exp_path.split('/')[-1]} A={A} B={B}: " + " ".join(f"{s:.1f}:{a:.2f}" for s, a in zip(SIG, acc))
+        json.dump({"acc": acc.tolist(), "sigma": SIG, "A": A, "B": B, "n": n, "rnd": rnd}, open(sys.argv[6], "w"))
+    print(f"{exp_path.split('/')[-1]} A={A} B={B} {'round' if rnd else 'floor'}: " + " ".join(f"{s:.1f}:{a:.2f}" for s, a in zip(SIG, acc))
           + f"  | hash {state_hash(th[:n], P[:n])} | max|Q| {int(np.abs(w).max())}")
