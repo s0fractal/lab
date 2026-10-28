@@ -3,8 +3,10 @@ Usage: artifacts/verify.py SNAPSHOT_DIR [--full | --bite | --only STAGE,...]   (
 
   hashes    every file in MANIFEST.json is there with its size and SHA-256, and nothing else is
   ckpts     every checkpoint loads and carries the kind, T, seed and step the manifest says
-  exports   export_js.py regenerates each frozen export from its frozen checkpoint (floats to 6 decimals, |d| <= 2e-6;
-            reference logits |d| <= 1e-4)
+  exports   export_js.py regenerates each frozen export from its frozen checkpoint: every number within
+            2e-6 + 1e-5 |x| (the parameters are rounded to 6 decimals; physics summaries such as the spectral norm of J
+            come from LAPACK and differ in the last bits between CPUs), the float reference logits after 32 tokens
+            within 1e-3 (the JS port agrees with torch to 5e-4); the worst gap is printed
   integer   intring.py on the frozen Soliton export at A = B = 8, round, reproduces results/bits-round/soliton-A8-B8
             exactly (integer arithmetic: no tolerance on any platform); --full adds Pure at A = B = 8 with floor, the
             PR #6 seam (results/bits/pure-A8-B8: 0.10 at sigma = 0)
@@ -118,14 +120,21 @@ for k in ("qat-soliton-A6", "qat-soliton-A7", "qat-pure-A7", "qat-pure-A8"):
     SRC[k] = (f"{k}-s900-step04000.pt",)
 
 
-def close(a, b, tol):
+def worst(a, b, path=""):
+    """(excess over tolerance, path, gap) of the worst number; structure or non-float mismatch is infinite."""
     if isinstance(a, dict):
-        return isinstance(b, dict) and a.keys() == b.keys() and all(close(a[k], b[k], tol) for k in a)
+        if not isinstance(b, dict) or a.keys() != b.keys():
+            return (float("inf"), path or "/", "keys")
+        return max((worst(a[k], b[k], f"{path}/{k}") for k in a), default=(0.0, path, 0.0))
     if isinstance(a, list):
-        return isinstance(b, list) and len(a) == len(b) and all(close(x, y, tol) for x, y in zip(a, b))
+        if not isinstance(b, list) or len(a) != len(b):
+            return (float("inf"), path, "length")
+        return max((worst(x, y, f"{path}[{i}]") for i, (x, y) in enumerate(zip(a, b))), default=(0.0, path, 0.0))
     if isinstance(a, float) or isinstance(b, float):
-        return abs(a - b) <= tol
-    return a == b
+        gap = abs(a - b)
+        tol = 1e-3 if path.startswith("/ref") else 2e-6 + 1e-5 * max(abs(a), abs(b))
+        return (gap / tol, path, gap)
+    return (0.0 if a == b else float("inf"), path, "differs")
 
 
 if stage("exports"):
@@ -136,8 +145,9 @@ if stage("exports"):
             check(False, f"export {name}")
             continue
         new, old = json.load(open(out)), json.load(open(os.path.join(SNAP, "exports", f"{name}.json")))
-        ref_new, ref_old = new.pop("ref", None), old.pop("ref", None)
-        check(close(new, old, 2e-6) and close(ref_new, ref_old, 1e-4), f"export {name} regenerates from {ck}")
+        w = worst(new, old)
+        check(w[0] <= 1, f"export {name} regenerates from {ck} (worst {w[1]}: {w[2]:.1e})" if isinstance(w[2], float)
+              else f"export {name} regenerates from {ck} ({w[1]}: {w[2]})")
 
 # integer replay
 if stage("integer"):
