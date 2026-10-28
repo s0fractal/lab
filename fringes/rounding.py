@@ -12,7 +12,8 @@ changes (stochastic rounding takes its offsets from a separate stream).
   dither:W    rnd 2 with a dither of width W LSB around 1/2 (W = 1 is stochastic, W = 0 is nearest)
 
 Per sigma: accuracy, and over every phase step the mean signed rounding error (LSB), its RMS, the share of steps that
-should move but round to zero (frozen) and the share below 1 LSB.
+should move but round to zero (frozen) and the share below 1 LSB; per rotor, the rounding error accumulated over the
+whole sequence (RMS over rotors, and the part that differs between the nodes of one ring).
 Usage: rounding.py LAB EXPORT A B MODE OUT [n]"""
 import json
 import sys
@@ -41,8 +42,10 @@ for s in SIG:
     st = ring.stats
     acc = float((lg.argmax(1) == b["targets"][:, -1]).mean())
     rows.append({"sigma": s, "acc": acc, "bias_lsb": st["err"] / st["n"], "rms_lsb": (st["err2"] / st["n"]) ** 0.5,
-                 "frozen": st["frozen"] / st["n"], "sub_lsb": st["sub"] / st["n"]})
+                 "frozen": st["frozen"] / st["n"], "sub_lsb": st["sub"] / st["n"], "cum_rms_lsb": st["cum_rms"],
+                 "cum_rel_rms_lsb": st["cum_rel_rms"]})
     r = rows[-1]
     print(f"{mode:10s} A={A} B={B} sigma {s:.1f}  acc {acc:.3f}  bias {r['bias_lsb']:+.3f}  rms {r['rms_lsb']:.3f}  "
-          f"frozen {r['frozen']:.3f}  sub-LSB {r['sub_lsb']:.3f}", flush=True)
+          f"frozen {r['frozen']:.3f}  sub-LSB {r['sub_lsb']:.3f}  cum {r['cum_rms_lsb']:.2f} (rel {r['cum_rel_rms_lsb']:.2f})",
+          flush=True)
 json.dump({"export": exp_path, "A": A, "B": B, "mode": mode, "n": n, "rows": rows}, open(out, "w"), indent=1)

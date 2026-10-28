@@ -117,6 +117,7 @@ class IntRing:
             st["err2"] = st.get("err2", 0.0) + float((err * err).sum())
             st["frozen"] = st.get("frozen", 0) + int(((inc == 0) & (y != 0)).sum())
             st["sub"] = st.get("sub", 0) + int((np.abs(y) < (1 << 20)).sum())
+            self._cum = self._cum + err                                  # accumulated rounding error per rotor
         return inc
 
     def force(self, th, gpin):
@@ -166,6 +167,7 @@ class IntRing:
         self._sr = ((np.uint64(seed) * np.uint64(2246822519) + i * np.uint64(2654435761) + e * np.uint64(40503)
                      + np.uint64(7)) & np.uint64(0xFFFFFFFF)).astype(np.uint32) | np.uint32(1)
         self._res = np.full((n, N, d), 1 << 19, np.int64)
+        self._cum = np.zeros((n, N, d))
         Dhat = np.full(n, 1 << F, np.int64)
         winding = []
         for t in range(T):
@@ -201,6 +203,10 @@ class IntRing:
                 half = 1 << (self.A - 1)
                 bonds = ((np.roll(th, -1, axis=1) - th + half) & mask) - half
                 winding.append(bonds.sum(axis=1) >> self.A)              # exact integer, per channel
+        if self.stats is not None:   # RMS over rotors of the rounding error accumulated over the whole sequence
+            self.stats["cum_rms"] = float(np.sqrt((self._cum ** 2).mean()))
+            rel = self._cum - self._cum.mean(axis=1, keepdims=True)     # the part that differs between nodes
+            self.stats["cum_rel_rms"] = float(np.sqrt((rel ** 2).mean()))
         z = np.concatenate([self.cos(th), self.sin(th), P], axis=2).reshape(n, -1)
         self._bound(z, self.W, z.shape[1], add=self.b * (1 << F))
         logits = z @ self.W.T + self.b * (1 << F)                        # exact, Q(2F)
