@@ -2,10 +2,15 @@
 s0fractal/genesis omega_v2/src/math.rs (integer phase circle, sine LUT, xorshift, wrap by bitmask).
 
   phase     theta in Z / 2^A (A state bits); the circle closes by the mask, so the winding number is an exact integer;
-            a phase step is rounded half up (rnd = 1, default) or floored (rnd = 0: a -1/2 LSB drift per step, a seam)
+            a phase step is rounded half up (rnd = 1, default) or floored (rnd = 0: a -1/2 LSB drift per step, a seam);
+            Python only, for the rounding controls (rounding.py): rnd = 2 stochastic rounding (a uniform sub-LSB
+            offset from a second xorshift stream, unbiased in expectation), rnd = 3 error feedback (each rotor keeps
+            its sub-LSB remainder and adds it to the next step, unbiased over time and deterministic)
   trig      sin/cos through a LUT of 2^B entries indexed by the top B bits of theta, values in Q(F)
   softmax   exp through a LUT on [-EXP_RANGE, 0] in steps of 2^-EXP_STEP, then an integer division
   numbers   momenta, forces, the Cayley rotation G, 1/m, sqrt(m), drives in Q(F); products are floored shifts
+            (prnd = 1, Python only: products, the force sums, the rotation and the noise scale round to nearest;
+            the softmax division, the symmetrisation and the divisions by d still floor)
   noise     xorshift32 per sequence; Irwin-Hall (sum of 4 uniforms of 16 bits, centred, scaled by sqrt(3)): variance
             1 up to the discrete centring, the rounded factor and the floors; a shared contract of the three runtimes,
             not exactly Gaussian and not the torch OU noise
@@ -30,10 +35,12 @@ EXP_RANGE, EXP_STEP = 16, 10          # exp LUT: arguments -16..0 in steps of 2^
 
 
 class IntRing:
-    def __init__(self, export: dict, A: int = 24, B: int = 16, F: int = 16, rnd: int = 1):
-        assert B <= A <= 30 and B <= 16 and F <= 16
+    def __init__(self, export: dict, A: int = 24, B: int = 16, F: int = 16, rnd: int = 1, prnd: int = 0):
+        assert B <= A <= 30 and B <= 16 and F <= 16 and rnd in (0, 1, 2, 3) and prnd in (0, 1)
         self.A, self.B, self.F = A, B, F
         self.rnd = rnd                    # phase increment: 1 rounds half up (default), 0 floors (biased by -1/2 LSB)
+        self.prnd = prnd                  # 1: products and sums round to nearest instead of floor
+        self.stats = None                 # a dict to collect phase-increment statistics in run()
         self.N, self.d, self.S = export["N"], export["d"], export["S"]
         self.mode = export["mode"]
         one = 1 << F
@@ -70,10 +77,13 @@ class IntRing:
             m = lambda v: int(np.max(np.abs(np.asarray(v, dtype=np.int64)))) if np.size(v) else 0  # noqa: E731
             self.peak = max(self.peak, k * m(a) * m(b) + m(add))
 
-    # --- integer helpers (floor semantics everywhere) ---
+    # --- integer helpers (floor semantics everywhere unless prnd) ---
+    def sh(self, v, k):
+        return (v + (1 << (k - 1))) >> k if self.prnd else v >> k
+
     def mul(self, a, b):
         self._bound(a, b)
-        return (a * b) >> self.F
+        return self.sh(a * b, self.F)
 
     def sin(self, th):
         return self.SIN[(th >> (self.A - self.B)) & ((1 << self.B) - 1)]
@@ -84,14 +94,34 @@ class IntRing:
     def rad_to_phase(self, x):
         """x radians in Q(F) -> phase units, floored (rnd = 0) or rounded half up (rnd = 1). Flooring a step smaller
         than one LSB gives 0 or -1, a drift of -1/2 LSB per step that turns every phase together."""
-        self._bound(x, self.ph_mul, add=1 << 19)
-        return (x * self.ph_mul + (self.rnd << 19)) >> 20
+        self._bound(x, self.ph_mul, add=1 << 20)
+        y = x * self.ph_mul
+        if self.rnd == 2:                                               # stochastic: + uniform 20-bit offset
+            self._sr ^= self._sr << np.uint32(13)
+            self._sr ^= self._sr >> np.uint32(17)
+            self._sr ^= self._sr << np.uint32(5)
+            inc = (y + (self._sr >> np.uint32(12)).astype(np.int64)) >> 20
+        elif self.rnd == 3:                                             # error feedback: carry the remainder
+            t = y + self._res
+            inc = t >> 20
+            self._res = t & ((1 << 20) - 1)
+        else:
+            inc = (y + (self.rnd << 19)) >> 20
+        if self.stats is not None:
+            err = inc - y / (1 << 20)
+            st = self.stats
+            st["n"] = st.get("n", 0) + err.size
+            st["err"] = st.get("err", 0.0) + float(err.sum())
+            st["err2"] = st.get("err2", 0.0) + float((err * err).sum())
+            st["frozen"] = st.get("frozen", 0) + int(((inc == 0) & (y != 0)).sum())
+            st["sub"] = st.get("sub", 0) + int((np.abs(y) < (1 << 20)).sum())
+        return inc
 
     def force(self, th, gpin):
         F, N, d = self.F, self.N, self.d
         c, s = self.cos(th), self.sin(th)                               # (n, N, d) Q(F)
         self._bound(c, c, 2 * d)
-        C = (np.einsum("nik,njk->nij", c, c) + np.einsum("nik,njk->nij", s, s)) >> F
+        C = self.sh(np.einsum("nik,njk->nij", c, c) + np.einsum("nik,njk->nij", s, s), F)
         C = C // d                                                      # Q(F), d = 2: exact shift
         z = self.mul(self.kappa, C)                                     # kappa C in Q(F)
         z = z - z.max(axis=2, keepdims=True)                            # <= 0
@@ -101,11 +131,11 @@ class IntRing:
         A = (e << F) // e.sum(axis=2, keepdims=True)                    # softmax rows, Q(F)
         As = (A + A.transpose(0, 2, 1)) >> 1
         self._bound(As, c, N)
-        ac = np.einsum("nij,njk->nik", As, c) >> F
-        as_ = np.einsum("nij,njk->nik", As, s) >> F
+        ac = self.sh(np.einsum("nij,njk->nik", As, c), F)
+        as_ = self.sh(np.einsum("nij,njk->nik", As, s), F)
         ds = self.mul(s, ac) - self.mul(c, as_)
         self._bound(self.kappa, ds)
-        f = -((self.kappa * ds) >> F) // d
+        f = -self.sh(self.kappa * ds, F) // d
         if self.lattice:
             fwd, bwd = np.roll(th, -1, axis=1) - th, th - np.roll(th, 1, axis=1)
             f = f + self.mul(self.g_lat, self.sin(fwd) - self.sin(bwd))
@@ -114,7 +144,7 @@ class IntRing:
 
     def rotate(self, P):
         self._bound(self.G, P, self.N)
-        return np.einsum("ij,njk->nik", self.G, P) >> self.F
+        return self.sh(np.einsum("ij,njk->nik", self.G, P), self.F)
 
     def run(self, x, sigma_q, seed=1, record=False):
         """x: (n, T) tokens; sigma_q: (n,) noise in Q(F). Returns logits (float), theta, P, per-token winding."""
@@ -123,13 +153,17 @@ class IntRing:
         th = np.zeros((n, N, d), np.int64)
         P = np.zeros((n, N, d), np.int64)
         self._bound(self.c2u, sigma_q)
-        c2 = (self.c2u * sigma_q) >> F                                     # Q(F), per sequence
+        c2 = self.sh(self.c2u * sigma_q, F)                                # Q(F), per sequence
         c2 = c2[:, None, None]
         # xorshift32 state per (sequence, node, channel): (seed * 2654435761 + i * 40503 + e * 2246822519 + 1) mod 2^32, odd
         i = np.arange(n, dtype=np.uint64)[:, None, None]
         e = np.arange(N * d, dtype=np.uint64).reshape(1, N, d)
         rng = ((np.uint64(seed) * np.uint64(2654435761) + i * np.uint64(40503) + e * np.uint64(2246822519) + np.uint64(1))
                & np.uint64(0xFFFFFFFF)).astype(np.uint32) | np.uint32(1)
+        # second stream for stochastic rounding (rnd = 2), apart from the physical noise; remainders for rnd = 3
+        self._sr = ((np.uint64(seed) * np.uint64(2246822519) + i * np.uint64(2654435761) + e * np.uint64(40503)
+                     + np.uint64(7)) & np.uint64(0xFFFFFFFF)).astype(np.uint32) | np.uint32(1)
+        self._res = np.full((n, N, d), 1 << 19, np.int64)
         Dhat = np.full(n, 1 << F, np.int64)
         winding = []
         for t in range(T):
@@ -154,7 +188,7 @@ class IntRing:
                     rng ^= rng << np.uint32(5)
                     acc += (rng >> np.uint32(16)).astype(np.int64)
                 self._bound(acc - (1 << 17), 113512)
-                xi = ((acc - (1 << 17)) * 113512) >> 16                  # sqrt(3) * 2^16 = 113512; Q16 Gaussian
+                xi = self.sh((acc - (1 << 17)) * 113512, 16)             # sqrt(3) * 2^16 = 113512; Q16 Gaussian
                 xi = xi >> (16 - F) if F < 16 else xi
                 P = self.mul(self.c1, P) + self.mul(c2, self.mul(self.sqm, xi))
                 th = (th + self.rad_to_phase(self.mul(self.h2, self.mul(self.invm, P)))) & mask
@@ -172,6 +206,7 @@ class IntRing:
 
     def export(self) -> dict:
         """Every integer the dynamics use, so another runtime needs no rounding of its own."""
+        assert self.rnd in (0, 1) and not self.prnd, "the JS and C engines implement floor and nearest only"
         L = lambda a: np.asarray(a).astype(np.int64).ravel().tolist()  # noqa: E731
         return {"A": self.A, "B": self.B, "F": self.F, "N": self.N, "d": self.d, "S": self.S, "mode": self.mode,
                 "EXP_RANGE": EXP_RANGE, "EXP_STEP": EXP_STEP, "SIN": L(self.SIN), "EXP": L(self.EXP), "h2": int(self.h2),
