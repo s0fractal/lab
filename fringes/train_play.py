@@ -14,7 +14,7 @@ from phs.models import build  # noqa: E402
 from phs.train import loss_and_hits, to_torch  # noqa: E402
 
 kind, T, seed, steps, out = sys.argv[2], int(sys.argv[3]), int(sys.argv[4]), int(sys.argv[5]), sys.argv[6]
-torch.set_num_threads(2)
+torch.set_num_threads(int(sys.argv[7]) if len(sys.argv) > 7 else 2)
 p = json.load(open(f"{LAB}/phs-soliton/prereg.json"))
 cfg = model_config(p, kind, "A")
 spec = tasks.TASKS["A"]
