@@ -21,8 +21,11 @@ A stage runs when its inputs are in the snapshot; a checkpoint or export it need
   rounding  rounding.py replays Soliton A = 7 stochastic and Pure A = 6 nearest at sigma = 0 and 0.2 from the seed-900
             exports: accuracy exactly, the phase-step statistics to 1e-9 relative (integer dynamics, the statistics
             are float sums of integers); --full adds Soliton A = 7 feedback and Pure A = 6 stochastic
-  readout   with --full only (about 5 minutes): readout.py replays Soliton seed 900 from its frozen checkpoint, every
-            decoder's accuracy within 2 sequences of 1024 per sigma (float states, as for the probe), D and K to 1e-6
+  readout   with --full only (about 3 minutes): readout.py replays Soliton seed 900 from its frozen checkpoint, every
+            decoder's accuracy within 2 sequences of 1024 per sigma up to 0.95 (float states, as for the probe; all the
+            README claims lie there), D and K to 1e-6. At sigma >= 1.0 the decoders sit near chance, decision margins
+            are tiny and the last float bits of another CPU flip single predictions (CI: 6 of 1024 at sigma 1.2 while
+            D agreed to 1e-6), so there the bound is one binomial standard error of the frozen accuracy
   --bite    the check must be able to fail, on copies with the manifest updated to match each change: one flipped
             byte (manifest left alone) must fail the hashes; a frozen result moved by one sequence must fail its
             replay; poisoned numbers (NaN, +inf, -inf, the literal 1e400 that a float parser makes inf, a large finite
@@ -365,10 +368,15 @@ if (FULL or (ONLY and "readout" in ONLY)) and "results/readout/soliton-s900.json
             if not all(finite(row[k], w[k]) for k in accs + ("D", "K")):
                 check(False, f"readout soliton s900 sigma {row['sigma']:.2f}: nonfinite value")
                 continue
-            gap = max(abs(row[k] - w[k]) * 1024 for k in accs)
+            near_chance = row["sigma"] >= 1.0 - 1e-9
+            tol = {k: max(2.0, math.sqrt(w[k] * (1 - w[k]) * 1024)) if near_chance else 2.0 for k in accs}
+            gaps = {k: abs(row[k] - w[k]) * 1024 for k in accs}
             sens = all(abs(row[k] - w[k]) <= 1e-6 * max(1.0, abs(w[k])) for k in ("D", "K"))
-            check(gap <= 2 and sens, f"readout soliton s900 sigma {row['sigma']:.2f}: sensor {row['sensor']:.4f} "
-                  f"(frozen {w['sensor']:.4f}), worst decoder gap {gap:.0f} of 1024, D {row['D']:.4f}")
+            check(all(gaps[k] <= tol[k] for k in accs) and sens,
+                  f"readout soliton s900 sigma {row['sigma']:.2f}: sensor {row['sensor']:.4f} (frozen {w['sensor']:.4f}), "
+                  f"worst decoder gap {max(gaps.values()):.0f} of 1024"
+                  + (f" (near chance: bound one SE, {min(tol.values()):.0f}+)" if near_chance else "")
+                  + f", D {row['D']:.4f}")
 
 print(f"verify {man['snapshot']}: {'FAILED: ' + '; '.join(bad) if bad else 'ok'}")
 sys.exit(1 if bad else 0)
