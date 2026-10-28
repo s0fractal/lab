@@ -23,3 +23,7 @@ jobs:
       - run: uv sync --frozen
         working-directory: phs-soliton
       - run: bash fringes/ci.sh
+      - name: frozen snapshot, replayed from its weights
+        run: phs-soliton/.venv/bin/python fringes/artifacts/verify.py fringes/artifacts/pr7-2026-10-28
+      - name: the snapshot check must be able to fail
+        run: phs-soliton/.venv/bin/python fringes/artifacts/verify.py fringes/artifacts/pr7-2026-10-28 --bite

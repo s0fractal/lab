@@ -1,0 +1,22 @@
+sigma 0.00  angle -0.00 pi  radius 1.00  |c| 1.00  acc 0.999  probe 0.999
+sigma 0.10  angle +0.01 pi  radius 0.98  |c| 0.98  acc 0.999  probe 0.999
+sigma 0.20  angle +0.02 pi  radius 0.94  |c| 0.94  acc 0.997  probe 0.997
+sigma 0.30  angle +0.04 pi  radius 0.87  |c| 0.88  acc 0.991  probe 0.997
+sigma 0.40  angle +0.07 pi  radius 0.79  |c| 0.80  acc 0.978  probe 0.990
+sigma 0.50  angle +0.10 pi  radius 0.71  |c| 0.71  acc 0.946  probe 0.975
+sigma 0.60  angle +0.14 pi  radius 0.59  |c| 0.60  acc 0.855  probe 0.932
+sigma 0.70  angle +0.18 pi  radius 0.50  |c| 0.51  acc 0.721  probe 0.849
+sigma 0.80  angle +0.22 pi  radius 0.39  |c| 0.40  acc 0.569  probe 0.718
+sigma 0.90  angle +0.26 pi  radius 0.30  |c| 0.32  acc 0.415  probe 0.555
+sigma 1.00  angle +0.29 pi  radius 0.21  |c| 0.25  acc 0.310  probe 0.421
+sigma 1.10  angle +0.32 pi  radius 0.14  |c| 0.20  acc 0.239  probe 0.289
+sigma 1.20  angle +0.38 pi  radius 0.08  |c| 0.17  acc 0.188  probe 0.207
+sigma 1.30  angle +0.42 pi  radius 0.05  |c| 0.16  acc 0.164  probe 0.171
+sigma 1.40  angle +0.49 pi  radius 0.03  |c| 0.16  acc 0.146  probe 0.163
+sigma 1.50  angle +0.50 pi  radius 0.01  |c| 0.16  acc 0.148  probe 0.143
+sigma 1.60  angle +0.96 pi  radius 0.00  |c| 0.18  acc 0.141  probe 0.137
+sigma 1.70  angle +0.04 pi  radius 0.01  |c| 0.18  acc 0.147  probe 0.150
+sigma 1.80  angle +0.31 pi  radius 0.01  |c| 0.18  acc 0.139  probe 0.146
+sigma 1.90  angle -0.30 pi  radius 0.00  |c| 0.20  acc 0.142  probe 0.150
+sigma 2.00  angle -0.42 pi  radius 0.00  |c| 0.21  acc 0.141  probe 0.166
+pure: top-2 plane holds 0.94 of the signal energy over sigma

@@ -113,7 +113,9 @@ def lda(ztr, ytr, zte, yte, K=7, lam=1e-3):
     return float((score.argmax(1) == yte).double().mean())
 
 
-sigmas = [round(0.05 * i, 2) for i in range(41)]
+# each sigma has its own test set and noise seed, so a subset (argv 6, comma-separated, starting at 0) reproduces
+# the same rows as the full scan; artifacts/verify.py uses this to replay a frozen result from the weights
+sigmas = ([float(v) for v in sys.argv[6].split(",")] if len(sys.argv) > 6 else [round(0.05 * i, 2) for i in range(41)])
 rows, c0 = [], None
 for s in sigmas:
     z, logit, y = final_state(s)
