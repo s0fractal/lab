@@ -6,19 +6,25 @@ Usage: artifacts/verify.py SNAPSHOT_DIR [--full | --bite | --only STAGE,...]   (
   exports   export_js.py regenerates each frozen export from its frozen checkpoint: every number within
             2e-6 + 1e-5 |x| (the parameters are rounded to 6 decimals; physics summaries such as the spectral norm of J
             come from LAPACK and differ in the last bits between CPUs), the float reference logits after 32 tokens
-            within 1e-3 (the JS port agrees with torch to 5e-4); the worst gap is printed
+            within 1e-3 (the JS port agrees with torch to 5e-4); the worst gap is printed. A NaN, an infinity or a
+            non-number on either side fails outright, before any error arithmetic (Codex review F5: a NaN ratio
+            compares false both ways, so max() dropped it and the export passed)
   integer   intring.py on the frozen Soliton export at A = B = 8, round, reproduces results/bits-round/soliton-A8-B8
             exactly (integer arithmetic: no tolerance on any platform); --full adds Pure at A = B = 8 with floor, the
             PR #6 seam (results/bits/pure-A8-B8: 0.10 at sigma = 0)
   float     probe.py on the frozen Soliton checkpoint (seed 900, step 4000) at sigma = 0, 0.7, 4096 sequences each,
             reproduces acc_fixed and acc_probe of results/probe2-soliton-4000; --full adds Pure and sigma 0.5, 0.8.
             Bit-equal on the machine that made it; elsewhere float kernels may differ in the last bits, so a gap of
-            up to 2 sequences in 4096 is reported and accepted, more fails.
-  --bite    the check must be able to fail: a copy with one flipped byte must fail the hashes, and a copy whose
-            frozen integer result is moved by one sequence, with the manifest updated to match, must fail the replay
+            up to 2 sequences in 4096 is reported and accepted, more fails; a nonfinite accuracy fails.
+  --bite    the check must be able to fail, on copies with the manifest updated to match each change: one flipped
+            byte (manifest left alone) must fail the hashes; a frozen integer result moved by one sequence must fail
+            the replay; exports whose kappa is NaN, +inf, -inf, the literal 1e400 (a float parser makes it inf) or
+            1e6 must each fail while the untouched exports pass; a NaN frozen probe accuracy must fail its row while
+            the other row passes
 Scratch output goes to fringes/runs/verify (ignored)."""
 import hashlib
 import json
+import math
 import os
 import shutil
 import subprocess
@@ -57,11 +63,46 @@ def bite():
         if row["path"] == "results/bits-round/soliton-A8-B8.json":
             row.update(bytes=os.path.getsize(f), sha256=hashlib.sha256(open(f, "rb").read()).hexdigest())
     json.dump(m, open(os.path.join(b, "MANIFEST.json"), "w"))
+    c = doctored("bite-nonfinite")
+    poison = {"qat-pure-A8": float("nan"), "qat-pure-A7": float("inf"), "qat-soliton-A7": float("-inf"),
+              "qat-soliton-A6": "1e400", "golden": 1e6}
+    changed = []
+    for name, v in poison.items():
+        f = os.path.join(c, "exports", f"{name}.json")
+        d = json.load(open(f))
+        d["kappa"] = "__RAW__" if isinstance(v, str) else v
+        text = json.dumps(d, separators=(",", ":"))
+        open(f, "w").write(text.replace('"__RAW__"', v) if isinstance(v, str) else text)
+        changed.append(f"exports/{name}.json")
+    f = os.path.join(c, "results", "probe2-soliton-4000.json")
+    d = json.load(open(f))
+    next(r for r in d["rows"] if abs(r["sigma"] - 0.7) < 1e-9)["acc_probe"] = float("nan")
+    json.dump(d, open(f, "w"))
+    changed.append("results/probe2-soliton-4000.json")
+    for snap, paths in ((b, ["results/bits-round/soliton-A8-B8.json"]), (c, changed)):
+        m = json.load(open(os.path.join(snap, "MANIFEST.json")))
+        for row in m["files"]:
+            if row["path"] in paths:
+                f = os.path.join(snap, row["path"])
+                row.update(bytes=os.path.getsize(f), sha256=hashlib.sha256(open(f, "rb").read()).hexdigest())
+        json.dump(m, open(os.path.join(snap, "MANIFEST.json"), "w"))
     failed = []
-    for d, only in ((a, "hashes"), (b, "hashes,integer")):
+    for d, only in ((a, "hashes"), (b, "hashes,integer"), (c, "hashes,exports,float")):
         r = subprocess.run([PY, os.path.abspath(__file__), d, "--only", only], capture_output=True, text=True)
-        print(f"{'ok ' if r.returncode else 'BAD'} bite {os.path.basename(d)}: {r.stdout.strip().splitlines()[-1]}")
-        if not r.returncode:
+        lines = r.stdout.strip().splitlines()
+        ok = r.returncode != 0
+        if d == c:   # every poisoned value refused, every untouched export and the other probe row still pass
+            want = [f"BAD export {n} " for n in poison] + [f"ok  export {n} " for n in ("soliton", "pure", "homeo")]
+            want += ["BAD float soliton sigma 0.70", "ok  float soliton sigma 0.00", "ok  SHA-256"]
+            missing = [w for w in want if not any(ln.startswith(w) for ln in lines)]
+            ok = ok and not missing
+            for ln in lines:
+                if ln.startswith("BAD"):
+                    print(f"      {ln}")
+            if missing:
+                print(f"      missing: {missing}")
+        print(f"{'ok ' if ok else 'BAD'} bite {os.path.basename(d)}: {lines[-1]}")
+        if not ok:
             failed.append(d)
         shutil.rmtree(d)
     sys.exit(1 if failed else 0)
@@ -120,8 +161,13 @@ for k in ("qat-soliton-A6", "qat-soliton-A7", "qat-pure-A7", "qat-pure-A8"):
     SRC[k] = (f"{k}-s900-step04000.pt",)
 
 
+def is_num(v):
+    return isinstance(v, (int, float)) and not isinstance(v, bool)
+
+
 def worst(a, b, path=""):
-    """(excess over tolerance, path, gap) of the worst number; structure or non-float mismatch is infinite."""
+    """(excess over tolerance, path, gap) of the worst number; a structure mismatch, a non-number against a float
+    and a NaN or infinity on either side are infinite, so the excess is never NaN and max() cannot drop it."""
     if isinstance(a, dict):
         if not isinstance(b, dict) or a.keys() != b.keys():
             return (float("inf"), path or "/", "keys")
@@ -131,9 +177,14 @@ def worst(a, b, path=""):
             return (float("inf"), path, "length")
         return max((worst(x, y, f"{path}[{i}]") for i, (x, y) in enumerate(zip(a, b))), default=(0.0, path, 0.0))
     if isinstance(a, float) or isinstance(b, float):
+        if not (is_num(a) and is_num(b)):
+            return (float("inf"), path, "not a number")
+        if not (math.isfinite(a) and math.isfinite(b)):
+            return (float("inf"), path, f"nonfinite {a} vs {b}")
         gap = abs(a - b)
         tol = 1e-3 if path.startswith("/ref") else 2e-6 + 1e-5 * max(abs(a), abs(b))
-        return (gap / tol, path, gap)
+        excess = gap / tol
+        return (excess if math.isfinite(excess) else float("inf"), path, gap)
     return (0.0 if a == b else float("inf"), path, "differs")
 
 
@@ -158,8 +209,9 @@ if stage("integer"):
         out = os.path.join(TMP, f"int-{name}-A{A}-B{B}-r{rnd}.json")
         r = run("-I", "intring.py", LAB, os.path.join(SNAP, "exports", f"{name}.json"), str(A), str(B), "256", out, str(rnd))
         got, want = json.load(open(out))["acc"], json.load(open(os.path.join(SNAP, "results", ref)))["acc"]
-        check(r.returncode == 0 and got == want, f"integer ring {name} A={A} B={B} rnd={rnd} reproduces {ref} exactly "
-              f"(Acc(0) {got[0]:.3f})")
+        finite = all(is_num(v) and math.isfinite(v) for v in got + want)
+        check(r.returncode == 0 and finite and got == want,
+              f"integer ring {name} A={A} B={B} rnd={rnd} reproduces {ref} exactly (Acc(0) {got[0]:.3f})")
 
 # float replay
 if stage("float"):
@@ -175,10 +227,12 @@ if stage("float"):
                                                                               f"probe2-{kind}-4000.json")))["rows"]}
         for row in json.load(open(out))["rows"]:
             w = want[round(row["sigma"], 2)]
-            gaps = [abs(row[k] - w[k]) * 4096 for k in ("acc_fixed", "acc_probe")]
-            check(max(gaps) <= 2, f"float {kind} sigma {row['sigma']:.2f}: acc_fixed {row['acc_fixed']:.4f} "
+            vals = [row[k] for k in ("acc_fixed", "acc_probe")] + [w[k] for k in ("acc_fixed", "acc_probe")]
+            finite = all(is_num(v) and math.isfinite(v) for v in vals)
+            gap = max(abs(row[k] - w[k]) * 4096 for k in ("acc_fixed", "acc_probe")) if finite else float("inf")
+            check(gap <= 2, f"float {kind} sigma {row['sigma']:.2f}: acc_fixed {row['acc_fixed']:.4f} "
                   f"(frozen {w['acc_fixed']:.4f}), acc_probe {row['acc_probe']:.4f} (frozen {w['acc_probe']:.4f}), "
-                  f"gap {max(gaps):.0f} of 4096")
+                  f"gap {gap:.0f} of 4096")
 
 print(f"verify {man['snapshot']}: {'FAILED: ' + '; '.join(bad) if bad else 'ok'}")
 sys.exit(1 if bad else 0)
