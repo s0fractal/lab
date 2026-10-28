@@ -26,6 +26,10 @@ c = torch.load(ckpt)
 spec = tasks.TASKS["A"]
 model = build(c["kind"], spec["vocab"], spec["classes"], c["cfg"], torch.Generator().manual_seed(0))
 model.load_state_dict(c["state"])
+if c.get("arch") == "homeostatic":
+    sys.path.insert(0, __import__("os").path.dirname(__import__("os").path.abspath(__file__)))
+    from homeo_forward import bind
+    bind(model, c.get("ema", 0.3))
 model.eval()
 T, N, d = c["T"], model.N, model.d
 grab = {}
