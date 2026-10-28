@@ -9,6 +9,7 @@ changes (stochastic rounding takes its offsets from a separate stream).
   stochastic  rnd 2, a uniform sub-LSB offset: unbiased in expectation, adds its own noise of up to 1 LSB
   feedback    rnd 3, each rotor carries its sub-LSB remainder (error feedback): unbiased over time, deterministic
   nearest+p   rnd 1 with products and sums also rounded to nearest (prnd): are the floors in P and forces a bias?
+  dither:W    rnd 2 with a dither of width W LSB around 1/2 (W = 1 is stochastic, W = 0 is nearest)
 
 Per sigma: accuracy, and over every phase step the mean signed rounding error (LSB), its RMS, the share of steps that
 should move but round to zero (frozen) and the share below 1 LSB.
@@ -26,8 +27,10 @@ sys.path.insert(0, f"{LAB}/phs-soliton")
 from phs import tasks  # noqa: E402
 
 MODES = {"floor": (0, 0), "nearest": (1, 0), "stochastic": (2, 0), "feedback": (3, 0), "nearest+p": (1, 1)}
-rnd, prnd = MODES[mode]
+rnd, prnd = MODES[mode] if not mode.startswith("dither:") else (2, 0)
 ring = IntRing(json.load(open(exp_path)), A=A, B=B, rnd=rnd, prnd=prnd)
+if mode.startswith("dither:"):
+    ring.sr_w = int(round(float(mode.split(":")[1]) * (1 << 20)))
 SIG = [round(0.1 * i, 1) for i in range(13)]
 rows = []
 for s in SIG:

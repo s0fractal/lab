@@ -40,6 +40,7 @@ class IntRing:
         self.A, self.B, self.F = A, B, F
         self.rnd = rnd                    # phase increment: 1 rounds half up (default), 0 floors (biased by -1/2 LSB)
         self.prnd = prnd                  # 1: products and sums round to nearest instead of floor
+        self.sr_w = 1 << 20               # rnd 2: dither width in 2^-20 LSB; the offset is uniform on 1/2 -+ w/2 LSB
         self.stats = None                 # a dict to collect phase-increment statistics in run()
         self.N, self.d, self.S = export["N"], export["d"], export["S"]
         self.mode = export["mode"]
@@ -100,7 +101,8 @@ class IntRing:
             self._sr ^= self._sr << np.uint32(13)
             self._sr ^= self._sr >> np.uint32(17)
             self._sr ^= self._sr << np.uint32(5)
-            inc = (y + (self._sr >> np.uint32(12)).astype(np.int64)) >> 20
+            u = (self._sr >> np.uint32(12)).astype(np.int64)            # uniform on [0, 2^20)
+            inc = (y + (1 << 19) - (self.sr_w >> 1) + ((u * self.sr_w) >> 20)) >> 20
         elif self.rnd == 3:                                             # error feedback: carry the remainder
             t = y + self._res
             inc = t >> 20
