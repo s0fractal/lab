@@ -21,11 +21,14 @@ A stage runs when its inputs are in the snapshot; a checkpoint or export it need
   rounding  rounding.py replays Soliton A = 7 stochastic and Pure A = 6 nearest at sigma = 0 and 0.2 from the seed-900
             exports: accuracy exactly, the phase-step statistics to 1e-9 relative (integer dynamics, the statistics
             are float sums of integers); --full adds Soliton A = 7 feedback and Pure A = 6 stochastic
-  readout   with --full only (about 3 minutes): readout.py replays Soliton seed 900 from its frozen checkpoint, every
-            decoder's accuracy within 2 sequences of 1024 per sigma up to 0.95 (float states, as for the probe; all the
-            README claims lie there), D and K to 1e-6. At sigma >= 1.0 the decoders sit near chance, decision margins
-            are tiny and the last float bits of another CPU flip single predictions (CI: 6 of 1024 at sigma 1.2 while
-            D agreed to 1e-6), so there the bound is one binomial standard error of the frozen accuracy
+  readout   with --full only (about 3 minutes): readout.py replays Soliton seed 900 from its frozen checkpoint. The
+            states are float and the decoders are fit on 51k of them, so another CPU flips a few predictions: two
+            GitHub runs (different runners) differed by up to 3 of 1024 at sigma <= 0.95 and up to 6 above, and in
+            one of them the mean sensors drifted by more than 1e-6 at sigma >= 1.1. Each accuracy must agree within
+            one binomial standard error of the frozen value (at least 3 of 1024; about 6 at accuracy 0.15, the
+            largest gap seen): the replay must stay inside the sampling noise of the frozen estimate, while the
+            decoders the README compares differ by 4 standard errors or more. D and
+            K agree within 1e-3 relative, 50 times finer than their change between neighbouring sigmas
   --bite    the check must be able to fail, on copies with the manifest updated to match each change: one flipped
             byte (manifest left alone) must fail the hashes; a frozen result moved by one sequence must fail its
             replay; poisoned numbers (NaN, +inf, -inf, the literal 1e400 that a float parser makes inf, a large finite
@@ -176,8 +179,9 @@ def bite():
 
 
 def bite_readout(files):
-    """One flipped byte must fail the hashes; one replay of a copy with a result moved by 3 sequences (sigma 0.70)
-    and a NaN (sigma 0.80) must fail exactly those rows and pass the sigma 0 control."""
+    """One flipped byte must fail the hashes; one replay of a copy with a result moved by 30 sequences (sigma 0.70,
+    about 2 standard errors, twice the bound) and a NaN (sigma 0.80) must fail exactly those rows and pass the
+    sigma 0 control."""
     a = os.path.join(TMP, "bite-byte")
     shutil.rmtree(a, ignore_errors=True)
     shutil.copytree(SNAP, a)
@@ -192,7 +196,7 @@ def bite_readout(files):
 
     def doctor(d):
         rows = {round(r["sigma"], 2): r for r in d["rows"]}
-        rows[0.7]["sensor"] += 3 / 1024
+        rows[0.7]["sensor"] += 30 / 1024
         rows[0.8]["oracle"] = float("nan")
     poison_json(os.path.join(c, target), doctor)
     rehash(c, [target])
@@ -358,6 +362,8 @@ if stage("rounding") and any(p.startswith("results/rounding/") for p in by_path)
 # honest-decoder replay (slow: every sigma of calibration and test, so only with --full or --only readout)
 if (FULL or (ONLY and "readout" in ONLY)) and "results/readout/soliton-s900.json" in by_path:
     out = os.path.join(TMP, "readout-soliton-s900.json")
+    cpu = next((ln.split(":", 1)[1].strip() for ln in open("/proc/cpuinfo") if ln.startswith("model name")), "?")
+    print(f"--  readout replay on {cpu}", flush=True)
     r = run("readout.py", LAB, find("checkpoints", "soliton-T032-s900-step04000.pt"), out, "2048", "2")
     if r.returncode:
         check(False, "readout soliton s900")
@@ -368,15 +374,14 @@ if (FULL or (ONLY and "readout" in ONLY)) and "results/readout/soliton-s900.json
             if not all(finite(row[k], w[k]) for k in accs + ("D", "K")):
                 check(False, f"readout soliton s900 sigma {row['sigma']:.2f}: nonfinite value")
                 continue
-            near_chance = row["sigma"] >= 1.0 - 1e-9
-            tol = {k: max(2.0, math.sqrt(w[k] * (1 - w[k]) * 1024)) if near_chance else 2.0 for k in accs}
+            tol = {k: max(3.0, math.sqrt(w[k] * (1 - w[k]) * 1024)) for k in accs}
             gaps = {k: abs(row[k] - w[k]) * 1024 for k in accs}
-            sens = all(abs(row[k] - w[k]) <= 1e-6 * max(1.0, abs(w[k])) for k in ("D", "K"))
-            check(all(gaps[k] <= tol[k] for k in accs) and sens,
+            rel = {k: abs(row[k] - w[k]) / max(abs(w[k]), 1e-12) for k in ("D", "K")}
+            k_bad = max(accs, key=lambda k: gaps[k] / tol[k])
+            check(all(gaps[k] <= tol[k] for k in accs) and max(rel.values()) <= 1e-3,
                   f"readout soliton s900 sigma {row['sigma']:.2f}: sensor {row['sensor']:.4f} (frozen {w['sensor']:.4f}), "
-                  f"worst decoder gap {max(gaps.values()):.0f} of 1024"
-                  + (f" (near chance: bound one SE, {min(tol.values()):.0f}+)" if near_chance else "")
-                  + f", D {row['D']:.4f}")
+                  f"tightest {k_bad} gap {gaps[k_bad]:.0f} of bound {tol[k_bad]:.1f}, D and K off by "
+                  f"{max(rel.values()):.1e}")
 
 print(f"verify {man['snapshot']}: {'FAILED: ' + '; '.join(bad) if bad else 'ok'}")
 sys.exit(1 if bad else 0)
