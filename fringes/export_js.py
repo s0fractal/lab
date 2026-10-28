@@ -47,5 +47,22 @@ with torch.no_grad():
                       + [8]])
     if mode != "homeo":
         exp["ref"] = {"x": x[0].tolist(), "logits": R(m(x, torch.zeros(1))[0, -1])}
+    else:   # the homeostatic forward of homeo_arch.py: g_pin / EMA(<cos m theta>), clamped at 0.3
+        ema = c.get("ema", 0.3)
+        th = torch.zeros(1, N, d)
+        Pm = torch.zeros_like(th)
+        c1, c2 = m.core.ou_coefficients(torch.zeros(1))
+        Dhat = torch.ones(1)
+        for t in range(x.shape[1]):
+            D = torch.cos(ph.m_pin * th).mean((1, 2))
+            Dhat = D if t == 0 else (1 - ema) * Dhat + ema * D
+            p2 = core.Physics(kappa=ph.kappa, g_lat=ph.g_lat, g_pin=ph.g_pin / Dhat.clamp_min(0.3)[:, None, None],
+                              m_pin=ph.m_pin, mass=ph.mass, J=ph.J, lattice=True)
+            f = core.internal_force(th, p2)
+            tok_ = x[:, t]
+            drive = core.Drive(phi=core.wrap(m.E_phi[tok_]), u=m.u_max * torch.sigmoid(m.E_u[tok_]))
+            th, Pm, f = m.core.token(th, Pm, f, p2, G, drive, c1, c2, None)
+        z = torch.cat([torch.cos(th), torch.sin(th), Pm], dim=-1).reshape(1, -1)
+        exp["ref"] = {"x": x[0].tolist(), "logits": R(m.readout(z)[0])}
 json.dump(exp, open(out, "w"), separators=(",", ":"))
 print(out, kind, mode, "N", N, "logits" if "ref" in exp else "", exp.get("ref", {}).get("logits"))
