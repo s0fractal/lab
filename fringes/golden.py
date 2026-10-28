@@ -1,4 +1,6 @@
-"""Golden-twist chain (post hoc play): a Soliton-PHS whose lattice bonds prefer a twist delta instead of 0,
+"""Golden chain (post hoc play), two ways to put the golden angle into the Soliton-PHS lattice.
+
+mode twist: the bonds prefer a twist delta instead of 0,
 
     V_FK = g_lat sum_i (1 - cos(theta_{i+1} - theta_i - delta)) + g_pin sum_i (1 - cos(m theta_i)),
 
@@ -9,8 +11,16 @@ chain with near-golden incommensurability: Aubry's last chain to pin. The contro
 Prediction: if the twisted chain stays unpinned (an Aubry sliding phase), its memory has a zero-frequency phason and
 no clock, so its accuracy decays without fringes; if it is pinned, the clock and the fringes come back.
 
+mode qp: the bonds stay untwisted and the pinning gets quasi-periodic offsets psi_i = 2 pi q i / N (Aubry-Andre),
+
+    V_FK = g_lat sum_i (1 - cos(theta_{i+1} - theta_i)) + g_pin sum_i (1 - cos(m (theta_i - psi_i))).
+
+Attention and bonds still want a uniform state, so nothing is frustrated; a uniform shift theta_i = c sees a pinning
+that averages to almost nothing, so in Aubry's sliding phase the global shift is a Goldstone mode with no frequency.
+Prediction for qp: memory without a clock, i.e. no anti-recall and no fringes.
+
 The patch replaces phs.core.lattice_force in this process only; phs-soliton is not changed.
-Usage: golden.py LAB q N seed steps out_dir [threads]   (q = 0 is the untwisted control)"""
+Usage: golden.py LAB q N seed steps out_dir [threads] [mode]   (q = 0 is the plain control; mode twist by default)"""
 import json
 import math
 import sys
@@ -21,6 +31,8 @@ import torch
 LAB = sys.argv[1]
 q, N, seed, steps, out = int(sys.argv[2]), int(sys.argv[3]), int(sys.argv[4]), int(sys.argv[5]), sys.argv[6]
 torch.set_num_threads(int(sys.argv[7]) if len(sys.argv) > 7 else 1)
+MODE = sys.argv[8] if len(sys.argv) > 8 else "twist"
+assert MODE in ("twist", "qp")
 sys.path.insert(0, f"{LAB}/phs-soliton")
 import phs.core as core  # noqa: E402
 from phs import tasks  # noqa: E402
@@ -28,13 +40,16 @@ from phs.models import build  # noqa: E402
 from phs.train import loss_and_hits, to_torch  # noqa: E402
 from tools.confirm import model_config  # noqa: E402
 
-DELTA = 2 * math.pi * q / N
+DELTA = 2 * math.pi * q / N if MODE == "twist" else 0.0
+PSI = (2 * math.pi * q / N * torch.arange(N, dtype=torch.float64))[:, None] if MODE == "qp" else torch.zeros(N, 1,
+                                                                                                         dtype=torch.float64)
 
 
 def twisted_lattice_force(theta, g_lat, g_pin, m_pin):
     fwd = torch.roll(theta, -1, dims=-2) - theta - DELTA
     bwd = theta - torch.roll(theta, 1, dims=-2) - DELTA
-    return g_lat * (torch.sin(fwd) - torch.sin(bwd)) - m_pin * g_pin * torch.sin(m_pin * theta)
+    psi = PSI.to(theta.dtype)
+    return g_lat * (torch.sin(fwd) - torch.sin(bwd)) - m_pin * g_pin * torch.sin(m_pin * (theta - psi))
 
 
 core.lattice_force = twisted_lattice_force
@@ -42,14 +57,14 @@ core.lattice_force = twisted_lattice_force
 # the force is the gradient of the twisted potential (checked once, float64, by autograd)
 th = torch.randn(3, N, 2, dtype=torch.float64, requires_grad=True)
 gl, gp = torch.tensor(1.3, dtype=torch.float64), torch.tensor(0.7, dtype=torch.float64)
-V = (gl * (1 - torch.cos(torch.roll(th, -1, dims=-2) - th - DELTA)) + gp * (1 - torch.cos(2 * th))).sum()
+V = (gl * (1 - torch.cos(torch.roll(th, -1, dims=-2) - th - DELTA)) + gp * (1 - torch.cos(2 * (th - PSI)))).sum()
 (grad,) = torch.autograd.grad(V, th)
 assert torch.allclose(-grad, twisted_lattice_force(th.detach(), gl, gp, 2), atol=1e-10), "twisted force != -grad V"
 
 p = json.load(open(f"{LAB}/phs-soliton/prereg.json"))
 cfg = dict(model_config(p, "soliton", "A"), N=N)
 spec = tasks.TASKS["A"]
-tag = f"golden-q{q}-N{N}-s{seed}"
+tag = f"golden-q{q}-N{N}-s{seed}" if MODE == "twist" else f"golden-qp-q{q}-N{N}-s{seed}"
 model = build("soliton", spec["vocab"], spec["classes"], cfg, torch.Generator().manual_seed(tasks.derive_seed("init", tag)))
 noise = torch.Generator().manual_seed(tasks.derive_seed("noise", tag))
 opt = torch.optim.AdamW(model.parameters(), lr=cfg["lr"], weight_decay=cfg["weight_decay"])
@@ -92,6 +107,7 @@ for j, s in enumerate(SIG):
     rows.append({"sigma": s, "acc": round(float(acc[j]), 4),
                  "C": round(float(C[j][:, off].mean()), 4),
                  "pin": round(float(torch.cos(2 * th[j]).mean()), 4),
+                 "pin_qp": round(float(torch.cos(2 * (th[j] - PSI.to(th.dtype))).mean()), 4),
                  "twist": round(float(torch.cos(bond[j] - DELTA).mean()), 4),
                  "q_top": round(float(diag["q_top"][j * n:(j + 1) * n, -1].abs().mean()), 3)})
 print("sigma " + " ".join(f"{r['sigma']:.2f}" for r in rows[::2]))
@@ -99,6 +115,7 @@ print("acc   " + " ".join(f"{r['acc']:.2f}" for r in rows[::2]))
 print("C     " + " ".join(f"{r['C']:.2f}" for r in rows[::2]))
 print("twist " + " ".join(f"{r['twist']:.2f}" for r in rows[::2]))
 print("pin   " + " ".join(f"{r['pin']:.2f}" for r in rows[::2]))
+print("pinqp " + " ".join(f"{r['pin_qp']:.2f}" for r in rows[::2]))
 print("|Q|   " + " ".join(f"{r['q_top']:.1f}" for r in rows[::2]))
-json.dump({"tag": tag, "q": q, "N": N, "delta": DELTA, "physics": model.learned_physics(), "rows": rows},
+json.dump({"tag": tag, "mode": MODE, "q": q, "N": N, "delta": DELTA, "physics": model.learned_physics(), "rows": rows},
           open(f"{out}/{tag}.json", "w"))
