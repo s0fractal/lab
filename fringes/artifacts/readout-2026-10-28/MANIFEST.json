@@ -1,0 +1,65 @@
+{
+ "snapshot": "readout-2026-10-28",
+ "what": "post hoc fringes runs behind fringes/README.md; not part of the phs-soliton PREREG v1 verdict",
+ "source_commit": "efe662d2a458eef09010a84e4ab53750787dec4f",
+ "source_note": "the code at this commit; earlier files were made by earlier versions of the same scripts (see status for the two corrected measurements)",
+ "environment": {
+  "python": "3.13.17",
+  "torch": "2.14.1+cu130",
+  "numpy": "2.5.3",
+  "platform": "Linux-6.18.44-fc-v180-x86_64-with-glibc2.39",
+  "cpu": "Intel(R) Xeon(R) Processor @ 2.10GHz"
+ },
+ "commands_run_from": "fringes/, with LAB = the lab checkout and the phs-soliton venv (uv sync --frozen)",
+ "cfgs": {},
+ "files": [
+  {
+   "path": "results/readout/pure-s900.json",
+   "role": "honest decoders (README: the honest decoder)",
+   "made_by": "readout.py LAB artifacts/pr7-2026-10-28/checkpoints/pure-T032-s900-step04000.pt runs/readout/pure-s900.json 2048 1",
+   "from": "runs/readout/pure-s900.json",
+   "bytes": 6736,
+   "sha256": "dc45f6091d0afb96e7a0b9984cbf38d380a596f37e856e37f839e5803d195c3b"
+  },
+  {
+   "path": "results/readout/pure-s901.json",
+   "role": "honest decoders (README: the honest decoder)",
+   "made_by": "readout.py LAB artifacts/pr7-2026-10-28/checkpoints/pure-T032-s901-step04000.pt runs/readout/pure-s901.json 2048 1",
+   "from": "runs/readout/pure-s901.json",
+   "bytes": 6554,
+   "sha256": "508d61eba945f3adf70ff20101bc25813e7d6f1c1fe31e344830ee3b0b482c73"
+  },
+  {
+   "path": "results/readout/pure-s902.json",
+   "role": "honest decoders (README: the honest decoder)",
+   "made_by": "readout.py LAB artifacts/pr7-2026-10-28/checkpoints/pure-T032-s902-step04000.pt runs/readout/pure-s902.json 2048 1",
+   "from": "runs/readout/pure-s902.json",
+   "bytes": 6548,
+   "sha256": "42700a55e7e9da9f54792c9f537b871ae7ff1d4a012375ecb9ddca0d49f038b5"
+  },
+  {
+   "path": "results/readout/soliton-s900.json",
+   "role": "honest decoders (README: the honest decoder)",
+   "made_by": "readout.py LAB artifacts/pr7-2026-10-28/checkpoints/soliton-T032-s900-step04000.pt runs/readout/soliton-s900.json 2048 1",
+   "from": "runs/readout/soliton-s900.json",
+   "bytes": 6637,
+   "sha256": "76c4d022f9ac3147b335d11bdae7eaa7c0f61f8e8c4dbe9c8da55e5c38574070"
+  },
+  {
+   "path": "results/readout/soliton-s901.json",
+   "role": "honest decoders (README: the honest decoder)",
+   "made_by": "readout.py LAB artifacts/pr7-2026-10-28/checkpoints/soliton-T032-s901-step04000.pt runs/readout/soliton-s901.json 2048 1",
+   "from": "runs/readout/soliton-s901.json",
+   "bytes": 6613,
+   "sha256": "38e201ec50429d7c3d8a3fc17fb4a7fb424e690c6e8930599ea53061d39c48e4"
+  },
+  {
+   "path": "results/readout/soliton-s902.json",
+   "role": "honest decoders (README: the honest decoder)",
+   "made_by": "readout.py LAB artifacts/pr7-2026-10-28/checkpoints/soliton-T032-s902-step04000.pt runs/readout/soliton-s902.json 2048 1",
+   "from": "runs/readout/soliton-s902.json",
+   "bytes": 6620,
+   "sha256": "39c74b1d582286e51247e8f03d3457b66252c6bf5e5f498797b63e5824470ec0"
+  }
+ ]
+}

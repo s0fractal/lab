@@ -21,6 +21,8 @@ A stage runs when its inputs are in the snapshot; a checkpoint or export it need
   rounding  rounding.py replays Soliton A = 7 stochastic and Pure A = 6 nearest at sigma = 0 and 0.2 from the seed-900
             exports: accuracy exactly, the phase-step statistics to 1e-9 relative (integer dynamics, the statistics
             are float sums of integers); --full adds Soliton A = 7 feedback and Pure A = 6 stochastic
+  readout   with --full only (about 5 minutes): readout.py replays Soliton seed 900 from its frozen checkpoint, every
+            decoder's accuracy within 2 sequences of 1024 per sigma (float states, as for the probe), D and K to 1e-6
   --bite    the check must be able to fail, on copies with the manifest updated to match each change: one flipped
             byte (manifest left alone) must fail the hashes; a frozen result moved by one sequence must fail its
             replay; poisoned numbers (NaN, +inf, -inf, the literal 1e400 that a float parser makes inf, a large finite
@@ -96,6 +98,8 @@ def bite():
     """Doctor copies of the snapshot; verify must refuse each, and must still pass what was not touched."""
     files = {f["path"] for f in json.load(open(os.path.join(SNAP, "MANIFEST.json")))["files"]}
     rounding = "results/rounding/soliton-A7-B7-stochastic.json" in files
+    if "results/readout/soliton-s900.json" in files:
+        return bite_readout(files)
 
     def doctored(name):
         d = os.path.join(TMP, name)
@@ -161,6 +165,48 @@ def bite():
                     print(f"      {ln}")
             if missing:
                 print(f"      missing: {missing}")
+        print(f"{'ok ' if ok else 'BAD'} bite {os.path.basename(d)}: {lines[-1] if lines else r.stderr[-300:]}")
+        if not ok:
+            failed.append(d)
+        shutil.rmtree(d)
+    sys.exit(1 if failed else 0)
+
+
+def bite_readout(files):
+    """One flipped byte must fail the hashes; one replay of a copy with a result moved by 3 sequences (sigma 0.70)
+    and a NaN (sigma 0.80) must fail exactly those rows and pass the sigma 0 control."""
+    a = os.path.join(TMP, "bite-byte")
+    shutil.rmtree(a, ignore_errors=True)
+    shutil.copytree(SNAP, a)
+    f = os.path.join(a, "results/readout/pure-s900.json")
+    raw = bytearray(open(f, "rb").read())
+    raw[len(raw) // 2] ^= 1
+    open(f, "wb").write(raw)
+    c = os.path.join(TMP, "bite-readout")
+    shutil.rmtree(c, ignore_errors=True)
+    shutil.copytree(SNAP, c)
+    target = "results/readout/soliton-s900.json"
+
+    def doctor(d):
+        rows = {round(r["sigma"], 2): r for r in d["rows"]}
+        rows[0.7]["sensor"] += 3 / 1024
+        rows[0.8]["oracle"] = float("nan")
+    poison_json(os.path.join(c, target), doctor)
+    rehash(c, [target])
+    plans = [(a, "hashes", []), (c, "hashes,readout", ["BAD readout soliton s900 sigma 0.70",
+                                                         "BAD readout soliton s900 sigma 0.80",
+                                                         "ok  readout soliton s900 sigma 0.00", "ok  SHA-256"])]
+    failed = []
+    for d, only, want in plans:
+        r = subprocess.run([PY, os.path.abspath(__file__), d, "--only", only], capture_output=True, text=True)
+        lines = r.stdout.strip().splitlines()
+        missing = [w for w in want if not any(ln.startswith(w) for ln in lines)]
+        ok = r.returncode != 0 and not missing
+        for ln in lines:
+            if want and ln.startswith("BAD"):
+                print(f"      {ln}")
+        if missing:
+            print(f"      missing: {missing}")
         print(f"{'ok ' if ok else 'BAD'} bite {os.path.basename(d)}: {lines[-1] if lines else r.stderr[-300:]}")
         if not ok:
             failed.append(d)
@@ -305,6 +351,24 @@ if stage("rounding") and any(p.startswith("results/rounding/") for p in by_path)
             ok = ok and row["acc"] == w["acc"] and all(abs(row[k] - w[k]) <= 1e-9 * max(1.0, abs(w[k])) for k in keys)
             check(ok, f"rounding {m} A={b} {mode} sigma {row['sigma']:.2f}: acc {row['acc']:.4f} "
                   f"(frozen {w['acc']:.4f}), bias {row['bias_lsb']:+.4f}, frozen steps {row['frozen']:.4f}")
+
+# honest-decoder replay (slow: every sigma of calibration and test, so only with --full or --only readout)
+if (FULL or (ONLY and "readout" in ONLY)) and "results/readout/soliton-s900.json" in by_path:
+    out = os.path.join(TMP, "readout-soliton-s900.json")
+    r = run("readout.py", LAB, find("checkpoints", "soliton-T032-s900-step04000.pt"), out, "2048", "2")
+    if r.returncode:
+        check(False, "readout soliton s900")
+    else:
+        frozen = json.load(open(os.path.join(SNAP, "results/readout/soliton-s900.json")))["rows"]
+        accs = ("fixed", "pooled", "sensor", "sigma_lda", "oracle")
+        for row, w in zip(json.load(open(out))["rows"], frozen):
+            if not all(finite(row[k], w[k]) for k in accs + ("D", "K")):
+                check(False, f"readout soliton s900 sigma {row['sigma']:.2f}: nonfinite value")
+                continue
+            gap = max(abs(row[k] - w[k]) * 1024 for k in accs)
+            sens = all(abs(row[k] - w[k]) <= 1e-6 * max(1.0, abs(w[k])) for k in ("D", "K"))
+            check(gap <= 2 and sens, f"readout soliton s900 sigma {row['sigma']:.2f}: sensor {row['sensor']:.4f} "
+                  f"(frozen {w['sensor']:.4f}), worst decoder gap {gap:.0f} of 1024, D {row['D']:.4f}")
 
 print(f"verify {man['snapshot']}: {'FAILED: ' + '; '.join(bad) if bad else 'ok'}")
 sys.exit(1 if bad else 0)
