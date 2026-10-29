@@ -29,11 +29,24 @@ A stage runs when its inputs are in the snapshot; a checkpoint or export it need
             largest gap seen): the replay must stay inside the sampling noise of the frozen estimate, while the
             decoders the README compares differ by 4 standard errors or more. D and
             K agree within 1e-3 relative, 50 times finer than their change between neighbouring sigmas
-  decoder   every transfer result was made with the frozen readout.py decoder: its sensor-bin edges equal those of
-            artifacts/readout-2026-10-28 for the same model (to 1e-6) and its own calibration check is recorded
-            (Codex review of #8, 1dec5d4: another seed format had drawn other calibration states and refit it)
+  decoder   in a decoder snapshot: every decoder file holds all its arrays, of one shape and finite except where an
+            LDA saw no state of a class (a whole NaN column of W and its entry of b, which transfer.py never
+            predicts; named in the log), on the 25-point grid (13 points for the decoders fit on sigma <= 0.6), and
+            its sensor-bin edges and mean calibration
+            sensors equal those of artifacts/readout-2026-10-28, which the same readout.py run wrote (exactly: there
+            is no arithmetic between them). In a transfer snapshot: every result carries those same edges, exactly, and
+            a calibration check of 0 (Codex review of #8, 1dec5d4: another seed format had drawn other calibration
+            states and refit the decoder; 3ad06e9: refitting on another CPU moves the edges by ~3e-5, so the decoder is
+            now frozen rather than refit)
+  rescore   transfer.py --readout-cells scores the frozen decoders of Soliton seed 900 and Pure seed 901 on readout.py's
+            own test cells at sigma = 0, 0.7, 0.8: all five accuracies within the readout bound (one binomial standard
+            error of 1024, at least 3) and D within 1e-3 relative; exact on the machine that made them. transfer.py
+            refuses any decoder file but the frozen one, so a doctored copy fails here even with its manifest updated
   transfer  transfer.py --cells replays the model's own readout and the oracle at sigma = 0 for T = 24 and 48 (Soliton
-            and Pure, seed 900): the time-locked readout, within one binomial standard error of 512 (at least 3)
+            and Pure, seed 900): the time-locked readout, within one binomial standard error of 512 (at least 3);
+            --full adds the whole transfer.py run of Soliton seed 900 with the frozen decoders (fresh, between, beyond,
+            T = 24 and 48: 60 test cells, about 2 minutes): every accuracy within one binomial standard error of 512
+            (at least 3), D within 1e-3 relative, the sigma cell, the edges and the calibration check exactly
   clocklaw  clocklaw.py replays Soliton seed 900 at T = 48: the overlap r(sigma) and the norm at all 25 sigmas within
             0.01, the first zero sigma0 within 0.005 (averages of 1024 float states; another CPU moves them by ~1e-5)
   --bite    the check must be able to fail, on copies with the manifest updated to match each change: one flipped
@@ -62,6 +75,8 @@ TMP = os.path.join(FR, "runs", "verify")
 os.makedirs(TMP, exist_ok=True)
 PR7 = os.path.join(HERE, "pr7-2026-10-28")
 READOUT = os.path.join(HERE, "readout-2026-10-28")
+LDA = ["pooled", "low_pooled"] + [f"bin{k:02d}" for k in range(16)] + [f"low_bin{k:02d}" for k in range(16)] + \
+    [f"cell{i:02d}" for i in range(25)]                                 # the LDAs in a frozen decoder file
 
 # export name -> (checkpoint, export_js mode args); the checkpoint is looked up in this snapshot, then in pr7
 SRC = {"soliton": ("soliton-T032-s900-step04000.pt",), "pure": ("pure-T032-s900-step04000.pt",),
@@ -142,6 +157,8 @@ def bite():
         return bite_readout(files)
     if "results/clocklaw/soliton-s900.json" in files:
         return bite_transfer()
+    if "decoders/soliton-s900.npz" in files:
+        return bite_decoder()
 
     def doctored(name):
         d = os.path.join(TMP, name)
@@ -311,6 +328,58 @@ def bite_transfer():
                                                        "ok  SHA-256"]),
              (e, "hashes,clocklaw,transfer", ["BAD clocklaw soliton s900: the frozen reference",
                                                "BAD transfer soliton s900: the frozen reference", "ok  SHA-256"])]
+    failed = []
+    for d, only, want in plans:
+        r = subprocess.run([PY, os.path.abspath(__file__), d, "--only", only], capture_output=True, text=True)
+        lines = r.stdout.strip().splitlines()
+        missing = [w for w in want if not any(ln.startswith(w) for ln in lines)]
+        ok = r.returncode != 0 and not missing
+        for ln in lines:
+            if want and ln.startswith("BAD"):
+                print(f"      {ln}")
+        if missing:
+            print(f"      missing: {missing}")
+        print(f"{'ok ' if ok else 'BAD'} bite {os.path.basename(d)}: {lines[-1] if lines else r.stderr[-300:]}")
+        if not ok:
+            failed.append(d)
+        shutil.rmtree(d)
+    sys.exit(1 if failed else 0)
+
+
+def bite_decoder():
+    """A flipped byte fails the hashes. A copy with the manifest updated has one sensor-bin edge of Pure seed 901 moved
+    by 1e-3 (the three-decimal calibration seed of 1dec5d4 moved them by 1.2e-3), a NaN in one LDA of Soliton seed 902
+    and one array of Pure seed 902 dropped: each must fail the decoder check while Soliton and Pure seed 900 pass, and
+    transfer.py must refuse to rescore with the moved Pure seed 901 file while Soliton seed 900 rescores."""
+    import numpy as np
+
+    def copy(name):
+        d = os.path.join(TMP, name)
+        shutil.rmtree(d, ignore_errors=True)
+        shutil.copytree(SNAP, d)
+        return d
+
+    def doctor(d, rel, change):
+        f = os.path.join(d, rel)
+        a = dict(np.load(f, allow_pickle=False))
+        change(a)
+        with open(f, "wb") as fh:                                          # np.savez(path) would append ".npz"
+            np.savez(fh, **a)
+        rehash(d, [rel])
+    a = copy("bite-byte")
+    f = os.path.join(a, "decoders/pure-s900.npz")
+    raw = bytearray(open(f, "rb").read())
+    raw[len(raw) // 2] ^= 1
+    open(f, "wb").write(raw)
+    b = copy("bite-moved")
+    doctor(b, "decoders/pure-s901.npz", lambda x: x["edges"].__setitem__(7, x["edges"][7] + 1e-3))
+    doctor(b, "decoders/soliton-s902.npz", lambda x: x["cell12_W"].__setitem__((0, 0), float("nan")))
+    doctor(b, "decoders/pure-s902.npz", lambda x: x.pop("low_bin15_b"))
+    plans = [(a, "hashes", []),
+             (b, "hashes,decoder,rescore", ["BAD decoder pure s901", "BAD decoder soliton s902", "BAD decoder pure s902",
+                                            "ok  decoder soliton s900", "ok  decoder pure s900",
+                                            "BAD rescore pure s901: transfer.py returned 0 rows, asked for 3 (it ref",
+                                            "ok  rescore soliton s900 sigma 0.70", "ok  SHA-256"])]
     failed = []
     for d, only, want in plans:
         r = subprocess.run([PY, os.path.abspath(__file__), d, "--only", only], capture_output=True, text=True)
@@ -514,7 +583,76 @@ if (FULL or (ONLY and "readout" in ONLY)) and "results/readout/soliton-s900.json
                   f"tightest {k_bad} gap {gaps[k_bad]:.0f} of bound {tol[k_bad]:.1f}, D and K off by "
                   f"{max(rel.values()):.1e}")
 
-# the transfer decoders must be the frozen readout.py ones
+# a decoder snapshot: the decoder files are readout.py's, as frozen
+if stage("decoder") and "decoders/soliton-s900.npz" in by_path:
+    import numpy as np
+    want_keys = {"sigmas", "edges", "D_cal", "low_sigmas", "low_edges"} | {f"{n}_{x}" for n in LDA for x in "Wb"}
+    for kind in ("soliton", "pure"):
+        for seed in (900, 901, 902):
+            what = f"decoder {kind} s{seed}"
+            ref = json.load(open(os.path.join(READOUT, f"results/readout/{kind}-s{seed}.json")))
+            try:
+                a = dict(np.load(os.path.join(SNAP, f"decoders/{kind}-s{seed}.npz"), allow_pickle=False))
+            except (OSError, ValueError) as e:
+                check(False, f"{what}: does not load ({e})")
+                continue
+            if set(a) != want_keys:
+                check(False, f"{what}: arrays missing or extra: {sorted(set(a) ^ want_keys)[:3]}")
+                continue
+            shapes = {(a[f"{n}_W"].shape, a[f"{n}_b"].shape) for n in LDA}
+            problems = [] if len(shapes) == 1 and next(iter(shapes))[0][1:] == next(iter(shapes))[1] else ["shapes"]
+            # a class with no state in an LDA's training cells has a NaN mean: a whole column of W and its entry of b
+            # are NaN, and transfer.py never predicts it. That is the only nonfinite value allowed
+            absent, nonfinite = [], [k for k in ("sigmas", "edges", "D_cal", "low_sigmas", "low_edges")
+                                     if not np.isfinite(a[k]).all()]
+            for n in LDA if not problems else []:
+                W, b = a[f"{n}_W"], a[f"{n}_b"]
+                gone = np.isnan(W).all(0)
+                if not (np.isfinite(W[:, ~gone]).all() and np.isfinite(b[~gone]).all() and np.isnan(b[gone]).all()):
+                    nonfinite.append(n)
+                absent += [f"{n} class {k}" for k in np.flatnonzero(gone)]
+            problems += [f"nonfinite values in {', '.join(nonfinite[:3])}"] if nonfinite else []
+            low = [x for x in GRID["readout"] if x <= 0.6]
+            problems += [] if a["sigmas"].tolist() == GRID["readout"] == sigmas(ref["rows"]) and \
+                a["low_sigmas"].tolist() == low and a["edges"].shape == a["low_edges"].shape == (15,) else ["grid"]
+            gap = float(np.max(np.abs(a["edges"] - np.asarray(ref["edges"])))) if "grid" not in problems else math.inf
+            problems += [] if a["edges"].tolist() == ref["edges"] and \
+                a["D_cal"].tolist() == [r["D_cal"] for r in ref["rows"]] else ["edges or D_cal differ from the readout"]
+            check(not problems, f"{what}: the frozen readout.py decoder, sensor-bin edges off by {gap:.1e}"
+                  + (f", an LDA without a class: {', '.join(absent)}" if absent else "")
+                  + (f": {', '.join(problems)}" if problems else ""))
+
+# the frozen decoders rescore readout.py's own test cells
+if stage("rescore") and "decoders/soliton-s900.npz" in by_path:
+    accs = ("fixed", "pooled", "sensor", "sigma_lda", "oracle")
+    print(f"--  rescore on {cpu_name()}", flush=True)
+    for kind, seed in (("soliton", 900), ("pure", 901)):
+        frozen = {round(r["sigma"], 2): r for r in
+                  json.load(open(os.path.join(READOUT, f"results/readout/{kind}-s{seed}.json")))["rows"]}
+        out = os.path.join(TMP, f"rescore-{kind}-s{seed}.json")
+        r = run("transfer.py", LAB, find("checkpoints", f"{kind}-T032-s{seed}-step04000.pt") or
+                os.path.join(PR7, "checkpoints", f"{kind}-T032-s{seed}-step04000.pt"), out, "2",
+                "--decoder", os.path.join(SNAP, f"decoders/{kind}-s{seed}.npz"), "--readout-cells", "0.0,0.7,0.8")
+        rows = json.load(open(out))["rows"] if r.returncode == 0 else []
+        if sigmas(rows) != [0.0, 0.7, 0.8]:
+            check(False, f"rescore {kind} s{seed}: transfer.py returned {len(rows)} rows, asked for 3"
+                  + (" (it refused the decoder)" if "not the frozen" in r.stderr else ""))
+            continue
+        for row in rows:
+            w = frozen[round(row["sigma"], 2)]
+            if not all(finite(row[k], w[k]) for k in accs + ("D",)):
+                check(False, f"rescore {kind} s{seed} sigma {row['sigma']:.2f}: nonfinite value")
+                continue
+            gaps = {k: abs(row[k] - w[k]) * 1024 for k in accs}
+            tol = {k: max(3.0, math.sqrt(w[k] * (1 - w[k]) * 1024)) for k in accs}
+            rel = abs(row["D"] - w["D"]) / max(abs(w["D"]), 1e-12)
+            exact = all(row[k] == w[k] for k in accs + ("D",))
+            check(all(gaps[k] <= tol[k] for k in accs) and rel <= 1e-3,
+                  f"rescore {kind} s{seed} sigma {row['sigma']:.2f}: sensor {row['sensor']:.4f} (readout "
+                  f"{w['sensor']:.4f}), sigma_lda {row['sigma_lda']:.4f} (readout {w['sigma_lda']:.4f}), "
+                  + ("exact" if exact else f"largest gap {max(gaps.values()):.0f} of 1024, D off by {rel:.1e}"))
+
+# a transfer snapshot: every result was made with the frozen readout.py decoder
 if stage("decoder") and "results/transfer/soliton-s900.json" in by_path:
     for kind in ("soliton", "pure"):
         for seed in (900, 901, 902):
@@ -524,8 +662,8 @@ if stage("decoder") and "results/transfer/soliton-s900.json" in by_path:
             ok = isinstance(e_t, list) and isinstance(e_r, list) and len(e_t) == len(e_r) == 15 and finite(*e_t, *e_r)
             gap = max(abs(a - b) for a, b in zip(e_t, e_r)) if ok else float("inf")
             cc = t.get("calibration_check", {})
-            ok = ok and gap <= 1e-6 and finite(cc.get("edges"), cc.get("D_cal")) and max(cc["edges"], cc["D_cal"]) <= 1e-6
-            check(ok, f"decoder {kind} s{seed}: sensor-bin edges match the frozen readout decoder (off by {gap:.1e})")
+            ok = ok and e_t == e_r and finite(cc.get("edges"), cc.get("D_cal")) and cc["edges"] == cc["D_cal"] == 0
+            check(ok, f"decoder {kind} s{seed}: sensor-bin edges equal the frozen readout decoder's (off by {gap:.1e})")
 
 # transfer replay: the time-locked readout at sigma = 0 for T = 24 and 48
 if stage("transfer") and "results/transfer/soliton-s900.json" in by_path:
@@ -548,6 +686,41 @@ if stage("transfer") and "results/transfer/soliton-s900.json" in by_path:
             ok = ok and all(gaps[k] <= max(3.0, math.sqrt(w[k] * (1 - w[k]) * 512)) for k in gaps)
             check(ok, f"transfer {kind} s900 T{c_['T']} sigma 0.00: own readout {c_['fixed']:.3f} (frozen {w['fixed']:.3f}),"
                   f" oracle {c_['oracle']:.3f} (frozen {w['oracle']:.3f})")
+
+# the whole transfer run of one model with the frozen decoders (slow, so only with --full or --only transfer-full)
+if (FULL or (ONLY and "transfer-full" in ONLY)) and "results/transfer/soliton-s900.json" in by_path:
+    frozen = json.load(open(os.path.join(SNAP, "results/transfer/soliton-s900.json")))
+    parts = {"fresh": [0.5, 0.6, 0.7, 0.8, 0.9], "between": [0.525, 0.625, 0.725, 0.825, 0.925],
+             "beyond": [0.7, 0.8, 0.9], "T24": GRID["readout"], "T48": GRID["readout"]}
+    if any([r_.get("sigma") for r_ in frozen.get(p_, [])] != v for p_, v in parts.items()):
+        check(False, "transfer-full soliton s900: the frozen reference lacks a part or a sigma")
+    else:
+        print(f"--  full transfer replay on {cpu_name()}", flush=True)
+        out = os.path.join(TMP, "transfer-full-soliton-s900.json")
+        r = run("transfer.py", LAB, find("checkpoints", "soliton-T032-s900-step04000.pt"), out, "2")
+        new = json.load(open(out)) if r.returncode == 0 else {}
+        check(new.get("edges") == frozen["edges"] and new.get("calibration_check") == frozen["calibration_check"],
+              "transfer-full soliton s900: the frozen decoder (edges and calibration check equal)")
+        for p_, v in parts.items():
+            got = new.get(p_, [])
+            if [r_.get("sigma") for r_ in got] != v:
+                check(False, f"transfer-full soliton s900 {p_}: {len(got)} rows replayed, {len(v)} asked for")
+                continue
+            gaps, worst_ = [], (0.0, "")
+            for row, w in zip(got, frozen[p_]):
+                ks = [k for k in w if k not in ("sigma", "sigma_cell", "D")]
+                if not all(k in row and finite(row[k], w[k]) for k in ks + ["D"]) or \
+                        row["sigma_cell"] != w["sigma_cell"]:
+                    gaps.append(math.inf)
+                    continue
+                for k in ks:
+                    g = abs(row[k] - w[k]) * 512 / max(3.0, math.sqrt(w[k] * (1 - w[k]) * 512))
+                    gaps.append(g)
+                    worst_ = max(worst_, (g, f"{k} at sigma {w['sigma']}"))
+                gaps.append(abs(row["D"] - w["D"]) / max(abs(w["D"]), 1e-12) / 1e-3)
+            exact = new.get(p_) == frozen[p_]
+            check(max(gaps) <= 1, f"transfer-full soliton s900 {p_}: {len(v)} cells, "
+                  + ("exact" if exact else f"tightest {worst_[1]} at {worst_[0]:.2f} of its bound"))
 
 # clock-law replay: the readout-free overlap at T = 48
 if stage("clocklaw") and "results/clocklaw/soliton-s900.json" in by_path:

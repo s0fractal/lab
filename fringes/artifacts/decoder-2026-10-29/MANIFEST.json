@@ -1,0 +1,65 @@
+{
+ "snapshot": "decoder-2026-10-29",
+ "what": "post hoc fringes runs behind fringes/README.md; not part of the phs-soliton PREREG v1 verdict",
+ "source_commit": "a6340486462f3390b794ca5f4fa7020bdb4f7b9c",
+ "source_note": "the code at this commit; earlier files were made by earlier versions of the same scripts (see status for the two corrected measurements)",
+ "environment": {
+  "python": "3.13.17",
+  "torch": "2.14.1+cu130",
+  "numpy": "2.5.3",
+  "platform": "Linux-6.18.44-fc-v185-x86_64-with-glibc2.39",
+  "cpu": "Intel(R) Xeon(R) Processor @ 2.80GHz"
+ },
+ "commands_run_from": "fringes/, with LAB = the lab checkout and the phs-soliton venv (uv sync --frozen)",
+ "cfgs": {},
+ "files": [
+  {
+   "path": "decoders/pure-s900.npz",
+   "role": "the fitted readout.py decoders that transfer.py scores (README: transfer); the JSON of the same run is byte-identical to artifacts/readout-2026-10-28",
+   "made_by": "readout.py LAB artifacts/pr7-2026-10-28/checkpoints/pure-T032-s900-step04000.pt runs/decoder/pure-s900.json 2048 1 --decoder runs/decoder/pure-s900.npz",
+   "from": "runs/decoder/pure-s900.npz",
+   "bytes": 666616,
+   "sha256": "55a7c809bcc0b04a3a950b7af006abfd990535a994786b9619587b501bca4489"
+  },
+  {
+   "path": "decoders/pure-s901.npz",
+   "role": "the fitted readout.py decoders that transfer.py scores (README: transfer); the JSON of the same run is byte-identical to artifacts/readout-2026-10-28",
+   "made_by": "readout.py LAB artifacts/pr7-2026-10-28/checkpoints/pure-T032-s901-step04000.pt runs/decoder/pure-s901.json 2048 1 --decoder runs/decoder/pure-s901.npz",
+   "from": "runs/decoder/pure-s901.npz",
+   "bytes": 666616,
+   "sha256": "81ed64649fdcb3dc9dbfbcdc1a3170b46e7f0bb61d884128560c3d7e65d4809a"
+  },
+  {
+   "path": "decoders/pure-s902.npz",
+   "role": "the fitted readout.py decoders that transfer.py scores (README: transfer); the JSON of the same run is byte-identical to artifacts/readout-2026-10-28",
+   "made_by": "readout.py LAB artifacts/pr7-2026-10-28/checkpoints/pure-T032-s902-step04000.pt runs/decoder/pure-s902.json 2048 1 --decoder runs/decoder/pure-s902.npz",
+   "from": "runs/decoder/pure-s902.npz",
+   "bytes": 666616,
+   "sha256": "774dc93db467a1fa749f02777f71b3f7603bea09117c53037d4d8780296925e1"
+  },
+  {
+   "path": "decoders/soliton-s900.npz",
+   "role": "the fitted readout.py decoders that transfer.py scores (README: transfer); the JSON of the same run is byte-identical to artifacts/readout-2026-10-28",
+   "made_by": "readout.py LAB artifacts/pr7-2026-10-28/checkpoints/soliton-T032-s900-step04000.pt runs/decoder/soliton-s900.json 2048 1 --decoder runs/decoder/soliton-s900.npz",
+   "from": "runs/decoder/soliton-s900.npz",
+   "bytes": 666616,
+   "sha256": "0b77bfdaada9f0eaf1709562541e3ba27e4f31d566e3aff881baa4ca27589408"
+  },
+  {
+   "path": "decoders/soliton-s901.npz",
+   "role": "the fitted readout.py decoders that transfer.py scores (README: transfer); the JSON of the same run is byte-identical to artifacts/readout-2026-10-28",
+   "made_by": "readout.py LAB artifacts/pr7-2026-10-28/checkpoints/soliton-T032-s901-step04000.pt runs/decoder/soliton-s901.json 2048 1 --decoder runs/decoder/soliton-s901.npz",
+   "from": "runs/decoder/soliton-s901.npz",
+   "bytes": 666616,
+   "sha256": "a95fceb274c94fb3158efed706b930daa34890d80ca9a07fbc8a38ecb7507ce7"
+  },
+  {
+   "path": "decoders/soliton-s902.npz",
+   "role": "the fitted readout.py decoders that transfer.py scores (README: transfer); the JSON of the same run is byte-identical to artifacts/readout-2026-10-28",
+   "made_by": "readout.py LAB artifacts/pr7-2026-10-28/checkpoints/soliton-T032-s902-step04000.pt runs/decoder/soliton-s902.json 2048 1 --decoder runs/decoder/soliton-s902.npz",
+   "from": "runs/decoder/soliton-s902.npz",
+   "bytes": 666616,
+   "sha256": "69c8226ec3e1152c08c85cc77701103d500d8e99d384a0847125d805d7ce8c37"
+  }
+ ]
+}

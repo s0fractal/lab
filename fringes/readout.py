@@ -71,8 +71,11 @@ def lda_fit(z, y, lam=1e-3):
 
 
 def lda_predict(model_, z):
+    # a class absent from an LDA's training states has NaN scores and is never predicted (argmax would pick the first
+    # NaN for every state); on the six frozen models none of the decoders this script scores lacks a class
     W, b = model_
-    return (z @ W + b).argmax(1)
+    s = z @ W + b
+    return np.where(np.isnan(s), -np.inf, s).argmax(1)
 
 
 def fit_sensor(sigmas):
