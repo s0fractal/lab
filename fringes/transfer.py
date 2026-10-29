@@ -15,8 +15,11 @@ nearest calibration cell; knows sigma, not T), oracle (LDA on one half of the te
 other half. The decoder file must be the one in the manifest of artifacts/decoder-2026-10-29 (SHA-256), and its
 sensor-bin edges and mean calibration sensors must equal those of artifacts/readout-2026-10-28 (both written by one
 run, so exactly); the run stops otherwise.
-Usage: transfer.py LAB CKPT OUT [threads] [--decoder DEC.npz] [--cells T:sigma,... | --readout-cells sigma,...]
---decoder names another copy of the decoder file (it must still be the frozen one).
+Usage: transfer.py LAB CKPT OUT [threads] [--decoder DEC.npz] [--spread]
+                   [--cells T:sigma,... | --readout-cells sigma,...]
+--decoder names another copy of the decoder file (it must still be the frozen one). --spread adds D_se to every scored
+cell, one standard error of its D (the spread over the cell's sequences), which artifacts/verify.py holds D's replay
+to; without it the output is that of the frozen snapshots, byte for byte.
 --cells scores only the model's readout and the oracle on the listed test cells, which is what artifacts/verify.py
 replays. --readout-cells scores the frozen decoders on readout.py's own test cells (namespace "play", T = 32, 2048
 per sigma): they must give readout.py's numbers, bit for bit on the machine that made them."""
@@ -32,6 +35,9 @@ if "--decoder" in sys.argv:
     i = sys.argv.index("--decoder")
     dec_path = sys.argv[i + 1]
     del sys.argv[i:i + 2]
+SPREAD = "--spread" in sys.argv
+if SPREAD:
+    sys.argv.remove("--spread")
 LAB, ckpt, out = sys.argv[1], sys.argv[2], sys.argv[3]
 torch.set_num_threads(int(sys.argv[4]) if len(sys.argv) > 4 else 1)
 sys.path.insert(0, f"{LAB}/phs-soliton")
@@ -121,7 +127,8 @@ def score(dec, cell, sigma):
     acc = lambda p: float((p[ev] == y[ev]).mean())  # noqa: E731
     return {"fixed": acc(fixed_pred), "pooled": acc(lda_predict(dec["pooled"], z)), "sensor": acc(sensor_pred),
             "sigma_lda": acc(lda_predict(dec["cells"][near], z)), "sigma_cell": near,
-            "oracle": float((lda_predict(lda_fit(z[:half], y[:half]), z[ev]) == y[ev]).mean()), "D": float(D.mean())}
+            "oracle": float((lda_predict(lda_fit(z[:half], y[:half]), z[ev]) == y[ev]).mean()), "D": float(D.mean()),
+            **({"D_se": float(D.std() / len(D) ** 0.5)} if SPREAD else {})}
 
 
 if "--cells" in sys.argv:
