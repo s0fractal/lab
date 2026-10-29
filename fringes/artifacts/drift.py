@@ -3,7 +3,9 @@ Every model parameter of Soliton seed 900 is multiplied by (1 + eps N(0,1)) (flo
 another CPU rounds differently), then cells are recomputed with the producer's own definitions:
   default      the T = 48 transfer cells, rescored with the frozen decoders. Prints, per sigma and at worst, the change
                of each accuracy from artifacts/transfer-2026-10-29b in units of one binomial standard error of 512 (at
-               least 3 sequences): the frozen decoders and the oracle, which is refit on each cell and so moves more
+               least 3 sequences): the frozen decoders and the oracle, which is refit on each cell and so moves more;
+               and of the cell mean of the sensor D, in its own standard errors (the spread of D over the cell's 1024
+               sequences) and relative
   --decouple   decouple.py's n = 0 and n = 63 at T = 128 and sigma 0, 0.6: the change of the model's own readout and of
                the same-sigma LDA (refit) in standard errors of 1024 (at least 3), and of the overlap r and the
                relative norm, from artifacts/decouple-2026-10-29
@@ -59,7 +61,10 @@ for row in frozen["T48"]:
     z, fp, y, D = ns["states"](s, "transfer", 48, 1024)
     sc = ns["score"](full, (z, fp, y, D), s)
     gaps = {k: abs(sc[k] - row[k]) * 512 / max(3.0, (row[k] * (1 - row[k]) * 512) ** 0.5) for k in keys}
-    for k in keys:
-        worst[k] = max(worst[k], (gaps[k], s))
-    print(f"eps {eps:.0e} sigma {s:.2f}: " + ", ".join(f"{k} {gaps[k]:.2f}" for k in keys), flush=True)
-print(f"eps {eps:.0e} worst: " + ", ".join(f"{k} {w[0]:.2f} (sigma {w[1]})" for k, w in worst.items()))
+    gaps["D"] = abs(sc["D"] - row["D"]) / (D.std() / len(D) ** 0.5)  # the cell mean of D, in its own standard errors
+    gaps["D_rel"] = abs(sc["D"] - row["D"]) / abs(row["D"])
+    for k in keys + ("D", "D_rel"):
+        worst[k] = max(worst.get(k, (-1.0, 0.0)), (gaps[k], s))
+    print(f"eps {eps:.0e} sigma {s:.2f}: " + ", ".join(f"{k} {gaps[k]:.2f}" for k in keys)
+          + f", D {gaps['D']:.2f} SE ({gaps['D_rel']:.1e} relative)", flush=True)
+print(f"eps {eps:.0e} worst: " + ", ".join(f"{k} {w[0]:.2g} (sigma {w[1]})" for k, w in worst.items()))
