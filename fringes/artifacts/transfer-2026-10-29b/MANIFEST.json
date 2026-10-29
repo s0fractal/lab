@@ -1,0 +1,113 @@
+{
+ "snapshot": "transfer-2026-10-29b",
+ "what": "post hoc fringes runs behind fringes/README.md; not part of the phs-soliton PREREG v1 verdict",
+ "source_commit": "22f8dde3f9b6d7deb08890700d4663fbc07b43e4",
+ "source_note": "the code at this commit; earlier files were made by earlier versions of the same scripts (see status for the two corrected measurements)",
+ "environment": {
+  "python": "3.13.17",
+  "torch": "2.14.1+cu130",
+  "numpy": "2.5.3",
+  "platform": "Linux-6.18.44-fc-v185-x86_64-with-glibc2.39",
+  "cpu": "Intel(R) Xeon(R) Processor @ 2.80GHz"
+ },
+ "commands_run_from": "fringes/, with LAB = the lab checkout and the phs-soliton venv (uv sync --frozen)",
+ "cfgs": {},
+ "files": [
+  {
+   "path": "results/clocklaw/pure-s900.json",
+   "role": "clock law without a readout (README: transfer)",
+   "made_by": "clocklaw.py LAB artifacts/pr7-2026-10-28/checkpoints/pure-T032-s900-step04000.pt runs/clocklaw/pure-s900.json 1",
+   "from": "runs/clocklaw/pure-s900.json",
+   "bytes": 3976,
+   "sha256": "000ac49f427beb05098abaece6dd4dea3a0858646d7aa402072511271f654d9f"
+  },
+  {
+   "path": "results/clocklaw/pure-s901.json",
+   "role": "clock law without a readout (README: transfer)",
+   "made_by": "clocklaw.py LAB artifacts/pr7-2026-10-28/checkpoints/pure-T032-s901-step04000.pt runs/clocklaw/pure-s901.json 1",
+   "from": "runs/clocklaw/pure-s901.json",
+   "bytes": 3964,
+   "sha256": "9f45fc9858ecd8529934e20df95aef9cf1f42738abd8015016b19d757db50d22"
+  },
+  {
+   "path": "results/clocklaw/pure-s902.json",
+   "role": "clock law without a readout (README: transfer)",
+   "made_by": "clocklaw.py LAB artifacts/pr7-2026-10-28/checkpoints/pure-T032-s902-step04000.pt runs/clocklaw/pure-s902.json 1",
+   "from": "runs/clocklaw/pure-s902.json",
+   "bytes": 4015,
+   "sha256": "5961119595ec878aebae7725cfd4624d6970538627f3879adb3fc61d6e212e7e"
+  },
+  {
+   "path": "results/clocklaw/soliton-s900.json",
+   "role": "clock law without a readout (README: transfer)",
+   "made_by": "clocklaw.py LAB artifacts/pr7-2026-10-28/checkpoints/soliton-T032-s900-step04000.pt runs/clocklaw/soliton-s900.json 1",
+   "from": "runs/clocklaw/soliton-s900.json",
+   "bytes": 4050,
+   "sha256": "693e82033a6399cc06fbbb45fb3ca80d2aeba47724047fbe256f65d8b51e1f75"
+  },
+  {
+   "path": "results/clocklaw/soliton-s901.json",
+   "role": "clock law without a readout (README: transfer)",
+   "made_by": "clocklaw.py LAB artifacts/pr7-2026-10-28/checkpoints/soliton-T032-s901-step04000.pt runs/clocklaw/soliton-s901.json 1",
+   "from": "runs/clocklaw/soliton-s901.json",
+   "bytes": 4034,
+   "sha256": "fa84f07aa933c95753a8960b5055a5bbd4ba0db0ee765dca573bb3b26ee2e5fb"
+  },
+  {
+   "path": "results/clocklaw/soliton-s902.json",
+   "role": "clock law without a readout (README: transfer)",
+   "made_by": "clocklaw.py LAB artifacts/pr7-2026-10-28/checkpoints/soliton-T032-s902-step04000.pt runs/clocklaw/soliton-s902.json 1",
+   "from": "runs/clocklaw/soliton-s902.json",
+   "bytes": 4063,
+   "sha256": "122dc2da01e2dbcef90fb290b67d051523116e0c82f7c9148592602b7b8b2fb1"
+  },
+  {
+   "path": "results/transfer/pure-s900.json",
+   "role": "the frozen readout.py decoders on unseen data (README: transfer); calibration checked against artifacts/readout-2026-10-28",
+   "made_by": "transfer.py LAB artifacts/pr7-2026-10-28/checkpoints/pure-T032-s900-step04000.pt runs/transfer2/pure-s900.json 1",
+   "from": "runs/transfer2/pure-s900.json",
+   "bytes": 13616,
+   "sha256": "998e71bb190286119a86527106f67f54a19550989a3c9614fa8cce3ca83e8057"
+  },
+  {
+   "path": "results/transfer/pure-s901.json",
+   "role": "the frozen readout.py decoders on unseen data (README: transfer); calibration checked against artifacts/readout-2026-10-28",
+   "made_by": "transfer.py LAB artifacts/pr7-2026-10-28/checkpoints/pure-T032-s901-step04000.pt runs/transfer2/pure-s901.json 1",
+   "from": "runs/transfer2/pure-s901.json",
+   "bytes": 13523,
+   "sha256": "c54d82ccf079491c52710eeeb7f1ff0797eb81f1a92fc28f906101314c23c348"
+  },
+  {
+   "path": "results/transfer/pure-s902.json",
+   "role": "the frozen readout.py decoders on unseen data (README: transfer); calibration checked against artifacts/readout-2026-10-28",
+   "made_by": "transfer.py LAB artifacts/pr7-2026-10-28/checkpoints/pure-T032-s902-step04000.pt runs/transfer2/pure-s902.json 1",
+   "from": "runs/transfer2/pure-s902.json",
+   "bytes": 13515,
+   "sha256": "a66c2e3c89f73b436f1aa94f7299c6113dcedcef6eee5acbeaa7ff16a6e8821a"
+  },
+  {
+   "path": "results/transfer/soliton-s900.json",
+   "role": "the frozen readout.py decoders on unseen data (README: transfer); calibration checked against artifacts/readout-2026-10-28",
+   "made_by": "transfer.py LAB artifacts/pr7-2026-10-28/checkpoints/soliton-T032-s900-step04000.pt runs/transfer2/soliton-s900.json 1",
+   "from": "runs/transfer2/soliton-s900.json",
+   "bytes": 13504,
+   "sha256": "133f55504a8c6d74e45f4373b2ffb9e5273a1bc7fea49fe298b2355d2ecee0f9"
+  },
+  {
+   "path": "results/transfer/soliton-s901.json",
+   "role": "the frozen readout.py decoders on unseen data (README: transfer); calibration checked against artifacts/readout-2026-10-28",
+   "made_by": "transfer.py LAB artifacts/pr7-2026-10-28/checkpoints/soliton-T032-s901-step04000.pt runs/transfer2/soliton-s901.json 1",
+   "from": "runs/transfer2/soliton-s901.json",
+   "bytes": 13440,
+   "sha256": "a569beca28da32d8ef8a4bbb8f6470db8261955d6dbdb851991de97947e1567c"
+  },
+  {
+   "path": "results/transfer/soliton-s902.json",
+   "role": "the frozen readout.py decoders on unseen data (README: transfer); calibration checked against artifacts/readout-2026-10-28",
+   "made_by": "transfer.py LAB artifacts/pr7-2026-10-28/checkpoints/soliton-T032-s902-step04000.pt runs/transfer2/soliton-s902.json 1",
+   "from": "runs/transfer2/soliton-s902.json",
+   "bytes": 13425,
+   "sha256": "b7951ef8a88a3634fc370d36e68ea3c02c7be215a858cc048b9ca56425b93687"
+  }
+ ]
+}
