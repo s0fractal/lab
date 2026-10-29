@@ -78,13 +78,15 @@ A stage runs when its inputs are in the snapshot; a checkpoint or export it need
             (artifacts/drift.py --kinds: one to ten float32 ulps of noise on the weights move the own readout by at
             most 0.26 standard errors, the refit LDA by 0.52, r and the norm by 0): the own readout within one
             binomial standard error of 1024 (at least 3), the LDA within three, r and the norm within 0.01. At sigma
-            = 0.6 the half pulses do not hold the signal and the last bits redraw the trajectories: the same noise
-            moved the own readout by up to 2.8 standard errors, the LDA by 3.1, r by 0.069 and the norm by 0.064, so
-            a replay there is a fresh draw: both accuracies within six standard errors, r and the norm within 0.15.
-            The 48 chance-level accuracies of the snapshot (Soliton, sigma 0.6 and 0.9) spread by 0.97 binomial
-            standard errors, but the frozen J63 LDA at sigma 0.6 (0.114) is the lowest of them, 2.7 of that spread
-            below their mean; an AMD EPYC 9V45 runner moved it by 4.0 standard errors, and a fresh draw passes 4.5
-            in about 3 % of runs. Six leaves about 3e-4 there and still parts chance (0.14) from PJ63 (0.53)
+            = 0.6 the half pulses do not hold the signal and the last bits redraw the trajectories, so a replay there
+            is a fresh draw and is held to the spread of one. The 48 chance-level cells of the snapshot (Soliton,
+            sigma 0.6 and 0.9) spread by 0.97 binomial standard errors in accuracy and by 0.053 in r; eight noises
+            of ten ulps on the weights (drift.py --kinds --seed) redraw these cells only in part (r by 0.02-0.03),
+            and two runners went further (AMD EPYC 9V45 moved the J63 LDA by 4.0 standard errors, AMD EPYC 7763 the
+            P63 r by 0.086). Both accuracies within six standard errors: the frozen J63 LDA (0.114) is the lowest
+            of the 48, 2.7 of their spread below the mean, and a fresh draw leaves six from it in about 3e-4 of
+            runs, where it left 4.5 in about 3 %. r and the norm within 0.3, four standard deviations of the
+            difference of two draws of r. Both still part chance (0.14, r near 0) from PJ63 (0.53, r +0.92)
   --bite    the check must be able to fail, on copies with the manifest updated to match each change: one flipped
             byte (manifest left alone) must fail the hashes; a frozen result moved by one sequence must fail its
             replay; poisoned numbers (NaN, +inf, -inf, the literal 1e400 that a float parser makes inf, a large finite
@@ -596,10 +598,12 @@ def bite_pause():
 
 def bite_kinds():
     """A flipped byte fails the hashes. A copy with the manifest updated has the frozen J63 memory (sigma 0,
-    same-sigma LDA) raised by 60 of 1024 (3.8 of its standard errors, outside three), the J63 LDA at sigma 0.6 by
-    eight standard errors (outside the six of a redrawn cell) and the P63 overlap at sigma 0.6 by 0.3 (outside
-    0.15): all must fail; the J21 own readout at sigma 0.6 is moved by four standard errors, inside six, and must
-    pass with P63 at sigma 0; a copy without the J21 row must fail before any replay."""
+    same-sigma LDA) raised by 60 of 1024 (3.8 of its standard errors, outside three) and must fail, while the J21
+    own readout at sigma 0, moved by half a standard error (inside one), must pass. At sigma 0.6, where off the
+    reference machine the replay is a fresh draw, the moves are of the size the study is about, not of a few
+    standard errors: the J63 LDA is set to PJ63's 0.53 (a J train that held the memory under heat) and the P63
+    overlap to PJ63's +0.92; both must fail on any machine, and J21 at sigma 0.6, untouched, must pass. A copy
+    without the J21 row must fail before any replay."""
     def copy(name):
         d = os.path.join(TMP, name)
         shutil.rmtree(d, ignore_errors=True)
@@ -615,10 +619,10 @@ def bite_kinds():
 
     def move(d):
         d["J63"]["aware"][0] += 60 / 1024
-        d["P63"]["r"][2] += 0.3
-        for nm, k, by in (("J21", "own", 4), ("J63", "aware", 8)):        # inside and outside six
-            w = d[nm][k][2]
-            d[nm][k][2] = w + by * max(3.0, math.sqrt(w * (1 - w) * 1024)) / 1024
+        w = d["J21"]["own"][0]
+        d["J21"]["own"][0] = w + 0.5 * max(3.0, math.sqrt(w * (1 - w) * 1024)) / 1024
+        d["J63"]["aware"][2] = d["PJ63"]["aware"][2]
+        d["P63"]["r"][2] = d["PJ63"]["r"][2]
     poison_json(os.path.join(b, ref), move)
     rehash(b, [ref])
     e = copy("bite-empty-ref")
@@ -626,8 +630,9 @@ def bite_kinds():
     rehash(e, [ref])
     plans = [(a, "hashes", []),
              (b, "hashes,kinds", ["BAD kinds soliton s900 J63 sigma 0.00", "BAD kinds soliton s900 J63 sigma 0.60",
-                                  "BAD kinds soliton s900 P63 sigma 0.60", "ok  kinds soliton s900 J21 sigma 0.60",
-                                  "ok  kinds soliton s900 P63 sigma 0.00", "ok  SHA-256"]),
+                                  "BAD kinds soliton s900 P63 sigma 0.60", "ok  kinds soliton s900 J21 sigma 0.00",
+                                  "ok  kinds soliton s900 J21 sigma 0.60", "ok  kinds soliton s900 P63 sigma 0.00",
+                                  "ok  SHA-256"]),
              (e, "hashes,kinds", ["BAD kinds soliton s900: the frozen reference", "ok  SHA-256"])]
     failed = []
     for d, only, want in plans:
@@ -1139,14 +1144,15 @@ if stage("kinds") and "results/kinds/soliton-s900.json" in by_path:
                         continue
                     # sigma = 0 does not move; at sigma = 0.6 the replay is a fresh draw (see the docstring)
                     se_n = {"own": 1, "aware": 3} if s_ == 0.0 else {"own": 6, "aware": 6}
-                    tol = 0.01 if s_ == 0.0 else 0.15
+                    tol = 0.01 if s_ == 0.0 else 0.3
                     acc = {k: abs(a[k][i] - w[k][j]) * 1024 / (max(3.0, math.sqrt(w[k][j] * (1 - w[k][j]) * 1024))
                                                                * se_n[k]) for k in ("own", "aware")}
                     ok = max(acc.values()) <= 1 and abs(a["r"][i] - w["r"][j]) <= tol and \
                         abs(a["norm"][i] - w["norm"][j]) <= tol
                     check(ok, f"kinds soliton s900 {nm} sigma {s_:.2f}: same-sigma LDA {a['aware'][i]:.3f} "
                           f"(frozen {w['aware'][j]:.3f}), r {a['r'][i]:+.3f} (frozen {w['r'][j]:+.3f}), own readout "
-                          f"{a['own'][i]:.3f} (frozen {w['own'][j]:.3f})")
+                          f"{a['own'][i]:.3f} (frozen {w['own'][j]:.3f}), norm {a['norm'][i]:.3f} (frozen "
+                          f"{w['norm'][j]:.3f})")
 
 print(f"verify {man['snapshot']}: {'FAILED: ' + '; '.join(bad) if bad else 'ok'}")
 sys.exit(1 if bad else 0)
