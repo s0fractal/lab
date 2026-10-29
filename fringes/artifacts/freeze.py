@@ -147,6 +147,13 @@ SPECS = [
      "(README: transfer); the JSON of the same run is byte-identical to artifacts/readout-2026-10-28",
      lambda m: f"readout.py LAB artifacts/pr7-2026-10-28/checkpoints/{m[1]}-T032-s{m[2]}-step04000.pt "
                f"runs/decoder/{m[1]}-s{m[2]}.json 2048 1 --decoder runs/decoder/{m[1]}-s{m[2]}.npz", None),
+    (r"echo/(soliton|pure)-s(\d+)\.json", "results/echo", "a spin echo for the clock memory (README: spin echo)",
+     lambda m: f"echo.py LAB artifacts/pr7-2026-10-28/checkpoints/{m[1]}-T032-s{m[2]}-step04000.pt "
+               f"runs/echo/{m[1]}-s{m[2]}.json 1", None),
+    (r"echo_path/(soliton|pure)-s(\d+)\.json", "results/echo_path", "the clock hand token by token (README: spin "
+     "echo; a picture, not a test)",
+     lambda m: f"echo_path.py LAB artifacts/pr7-2026-10-28/checkpoints/{m[1]}-T032-s{m[2]}-step04000.pt "
+               f"runs/echo_path/{m[1]}-s{m[2]}.json 1", None),
     (r"clocklaw/(soliton|pure)-s(\d+)\.json", "results/clocklaw", "clock law without a readout (README: transfer)",
      lambda m: f"clocklaw.py LAB artifacts/pr7-2026-10-28/checkpoints/{m[1]}-T032-s{m[2]}-step04000.pt "
                f"runs/clocklaw/{m[1]}-s{m[2]}.json 1", None),

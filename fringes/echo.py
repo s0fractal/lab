@@ -21,7 +21,9 @@ overlap r with the sigma = 0 signal of the same protocol, its norm relative to t
 (sigma0, linear between grid points); a pooled LDA fit at sigma = 0 only (2048 sequences of namespace "echo-cal", the
 same protocol) and scored on every test cell: a decoder that does not know the temperature. Across protocols: the
 overlaps of their sigma = 0 signals.
-Usage: echo.py LAB CKPT OUT [threads] [--selftest]
+Usage: echo.py LAB CKPT OUT [threads] [--selftest | --only NAME,... --sigmas S,...]
+--only and --sigmas run a subset (sigma 0 first, since r is measured against it), which is what artifacts/verify.py
+replays; the cells are the same as in the full run.
 --selftest: with no pulse the loop gives the model's own logits bit for bit (sigma 0 and 0.6); G^-1 G = I; and one
 reversed token or one momentum flip changes the logits (the bite)."""
 import dataclasses
@@ -148,6 +150,10 @@ if "--selftest" in sys.argv:
         ok &= moved > 1e-4
     sys.exit(0 if ok else 1)
 
+if "--only" in sys.argv:
+    PROTOCOLS = {k: PROTOCOLS[k] for k in sys.argv[sys.argv.index("--only") + 1].split(",")}
+    GRID = [float(v) for v in sys.argv[sys.argv.index("--sigmas") + 1].split(",")]
+    assert GRID[0] == 0.0, "r is measured against sigma = 0, so the sigma list starts there"
 res = {"ckpt": ckpt, "kind": c["kind"], "seed": c["seed"], "n": 1024, "n_cal": 2048, "sigma": GRID}
 c0 = {}
 for name, (T, field, flips) in PROTOCOLS.items():

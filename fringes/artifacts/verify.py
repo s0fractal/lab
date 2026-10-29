@@ -53,6 +53,11 @@ A stage runs when its inputs are in the snapshot; a checkpoint or export it need
             decoders moved by at most 0.39. It gets three standard errors (at least 3 sequences)
   clocklaw  clocklaw.py replays Soliton seed 900 at T = 48: the overlap r(sigma) and the norm at all 25 sigmas within
             0.01, the first zero sigma0 within 0.005 (averages of 1024 float states; another CPU moves them by ~1e-5)
+  echo      echo.py --selftest on Soliton and Pure seed 900 (the unpulsed loop is the model bit for bit, G^-1 G = I,
+            the pulses bite), then echo.py --only none48,echoJ48,echoPJ48,rewindPJ48 at sigma = 0 and 0.6 on Soliton
+            seed 900: the model's own readout within one binomial standard error of 1024 (at least 3); the LDA fit at
+            sigma = 0 within three, since it is refit on the states, like the oracle of transfer --full; the overlap r
+            and the norm within 0.01, as in clocklaw
   --bite    the check must be able to fail, on copies with the manifest updated to match each change: one flipped
             byte (manifest left alone) must fail the hashes; a frozen result moved by one sequence must fail its
             replay; poisoned numbers (NaN, +inf, -inf, the literal 1e400 that a float parser makes inf, a large finite
@@ -79,6 +84,8 @@ TMP = os.path.join(FR, "runs", "verify")
 os.makedirs(TMP, exist_ok=True)
 PR7 = os.path.join(HERE, "pr7-2026-10-28")
 READOUT = os.path.join(HERE, "readout-2026-10-28")
+ECHO = ["none24", "none32", "none48", "off24", "off48", "echoJ48", "echoP48", "echoPJ48", "rewindJ48", "rewindP48",
+        "rewindPJ48"]                                                   # the protocols of echo.py
 LDA = ["pooled", "low_pooled"] + [f"bin{k:02d}" for k in range(16)] + [f"low_bin{k:02d}" for k in range(16)] + \
     [f"cell{i:02d}" for i in range(25)]                                 # the LDAs in a frozen decoder file
 
@@ -163,6 +170,8 @@ def bite():
         return bite_transfer()
     if "decoders/soliton-s900.npz" in files:
         return bite_decoder()
+    if "results/echo/soliton-s900.json" in files:
+        return bite_echo()
 
     def doctored(name):
         d = os.path.join(TMP, name)
@@ -388,6 +397,54 @@ def bite_decoder():
                                             "ok  decoder soliton s900", "ok  decoder pure s900",
                                             "BAD rescore pure s901: transfer.py returned 0 rows, asked for 3 (it ref",
                                             "ok  rescore soliton s900 sigma 0.70", "ok  SHA-256"])]
+    failed = []
+    for d, only, want in plans:
+        r = subprocess.run([PY, os.path.abspath(__file__), d, "--only", only], capture_output=True, text=True)
+        lines = r.stdout.strip().splitlines()
+        missing = [w for w in want if not any(ln.startswith(w) for ln in lines)]
+        ok = r.returncode != 0 and not missing
+        for ln in lines:
+            if want and ln.startswith("BAD"):
+                print(f"      {ln}")
+        if missing:
+            print(f"      missing: {missing}")
+        print(f"{'ok ' if ok else 'BAD'} bite {os.path.basename(d)}: {lines[-1] if lines else r.stderr[-300:]}")
+        if not ok:
+            failed.append(d)
+        shutil.rmtree(d)
+    sys.exit(1 if failed else 0)
+
+
+def bite_echo():
+    """A flipped byte fails the hashes. A copy with the manifest updated has the overlap of the Loschmidt echo
+    (echoPJ48, sigma 0.6) moved by 0.05 and the rewound readout (rewindPJ48, sigma 0) by 30 of 1024: those must fail
+    while none48 passes; a copy without the echoJ48 protocol must fail before any replay."""
+    def copy(name):
+        d = os.path.join(TMP, name)
+        shutil.rmtree(d, ignore_errors=True)
+        shutil.copytree(SNAP, d)
+        return d
+    ref = "results/echo/soliton-s900.json"
+    a = copy("bite-byte")
+    f = os.path.join(a, "results/echo/pure-s900.json")
+    raw = bytearray(open(f, "rb").read())
+    raw[len(raw) // 2] ^= 1
+    open(f, "wb").write(raw)
+    b = copy("bite-moved")
+
+    def move(d):
+        d["echoPJ48"]["r"][12] -= 0.05
+        d["rewindPJ48"]["own"][0] -= 30 / 1024
+    poison_json(os.path.join(b, ref), move)
+    rehash(b, [ref])
+    e = copy("bite-empty-ref")
+    poison_json(os.path.join(e, ref), lambda d: d.pop("echoJ48"))
+    rehash(e, [ref])
+    plans = [(a, "hashes", []),
+             (b, "hashes,echo", ["BAD echo soliton s900 echoPJ48 sigma 0.60", "BAD echo soliton s900 rewindPJ48 sigma 0.00",
+                                 "ok  echo soliton s900 none48 sigma 0.60", "ok  echo soliton s900 echoPJ48 sigma 0.00",
+                                 "ok  SHA-256"]),
+             (e, "hashes,echo", ["BAD echo soliton s900: the frozen reference", "ok  SHA-256"])]
     failed = []
     for d, only, want in plans:
         r = subprocess.run([PY, os.path.abspath(__file__), d, "--only", only], capture_output=True, text=True)
@@ -753,6 +810,42 @@ if stage("clocklaw") and "results/clocklaw/soliton-s900.json" in by_path:
                 check(ok, f"clocklaw soliton s900 T48 sigma {s_:.2f}: r {vals[0]:+.3f} (frozen {vals[1]:+.3f})")
             z0, z1 = new.get("sigma0"), f48.get("sigma0")
             check(finite(z0, z1) and abs(z0 - z1) <= 0.005, f"clocklaw soliton s900 T48: first zero {z0} (frozen {z1})")
+
+# the spin echo: the selftests and four protocols at sigma 0 and 0.6
+if stage("echo") and "results/echo/soliton-s900.json" in by_path:
+    for kind in ("soliton", "pure"):
+        r = run("-I", "echo.py", LAB, find("checkpoints", f"{kind}-T032-s900-step04000.pt"), os.devnull, "2", "--selftest")
+        check(r.returncode == 0, f"echo {kind} s900 selftest: the unpulsed loop is the model bit for bit, G^-1 G = I, "
+              "the pulses bite")
+    frozen = json.load(open(os.path.join(SNAP, "results/echo/soliton-s900.json")))
+    names = ["none48", "echoJ48", "echoPJ48", "rewindPJ48"]
+    whole = all(isinstance(frozen.get(p_), dict) and all(len(frozen[p_].get(k, [])) == 25
+                                                         for k in ("own", "lda0", "r", "norm")) for p_ in ECHO)
+    if [round(v, 2) if is_num(v) else v for v in frozen.get("sigma", [])] != GRID["readout"] or not whole:
+        check(False, "echo soliton s900: the frozen reference lacks a protocol or the 25-point grid")
+    else:
+        print(f"--  echo replay on {cpu_name()}", flush=True)
+        out = os.path.join(TMP, "echo-soliton-s900.json")
+        r = run("-I", "echo.py", LAB, find("checkpoints", "soliton-T032-s900-step04000.pt"), out, "2",
+                "--only", ",".join(names), "--sigmas", "0.0,0.6")
+        new = json.load(open(out)) if r.returncode == 0 else {}
+        if new.get("sigma") != [0.0, 0.6] or any(nm not in new for nm in names):
+            check(False, "echo soliton s900: the replay did not return the four protocols at sigma 0 and 0.6")
+        else:
+            for nm in names:
+                for i, s_ in enumerate((0.0, 0.6)):
+                    a, w, j = new[nm], frozen[nm], GRID["readout"].index(s_)
+                    keys = ("own", "lda0", "r", "norm")
+                    if not all(finite(a[k][i], w[k][j]) for k in keys):
+                        check(False, f"echo soliton s900 {nm} sigma {s_:.2f}: nonfinite value")
+                        continue
+                    acc = {k: abs(a[k][i] - w[k][j]) * 1024 / max(3.0, math.sqrt(w[k][j] * (1 - w[k][j]) * 1024)
+                                                                   * (3 if k == "lda0" else 1)) for k in ("own", "lda0")}
+                    ok = max(acc.values()) <= 1 and abs(a["r"][i] - w["r"][j]) <= 0.01 and \
+                        abs(a["norm"][i] - w["norm"][j]) <= 0.01
+                    check(ok, f"echo soliton s900 {nm} sigma {s_:.2f}: own readout {a['own'][i]:.3f} (frozen "
+                          f"{w['own'][j]:.3f}), r {a['r'][i]:+.3f} (frozen {w['r'][j]:+.3f}), sigma-0 LDA "
+                          f"{a['lda0'][i]:.3f} (frozen {w['lda0'][j]:.3f})")
 
 print(f"verify {man['snapshot']}: {'FAILED: ' + '; '.join(bad) if bad else 'ok'}")
 sys.exit(1 if bad else 0)
