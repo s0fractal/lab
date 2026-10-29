@@ -143,6 +143,10 @@ SPECS = [
      "(README: transfer); calibration checked against artifacts/readout-2026-10-28",
      lambda m: f"transfer.py LAB artifacts/pr7-2026-10-28/checkpoints/{m[1]}-T032-s{m[2]}-step04000.pt "
                f"runs/transfer2/{m[1]}-s{m[2]}.json 1", None),
+    (r"decoder/(soliton|pure)-s(\d+)\.npz", "decoders", "the fitted readout.py decoders that transfer.py scores "
+     "(README: transfer); the JSON of the same run is byte-identical to artifacts/readout-2026-10-28",
+     lambda m: f"readout.py LAB artifacts/pr7-2026-10-28/checkpoints/{m[1]}-T032-s{m[2]}-step04000.pt "
+               f"runs/decoder/{m[1]}-s{m[2]}.json 2048 1 --decoder runs/decoder/{m[1]}-s{m[2]}.npz", None),
     (r"clocklaw/(soliton|pure)-s(\d+)\.json", "results/clocklaw", "clock law without a readout (README: transfer)",
      lambda m: f"clocklaw.py LAB artifacts/pr7-2026-10-28/checkpoints/{m[1]}-T032-s{m[2]}-step04000.pt "
                f"runs/clocklaw/{m[1]}-s{m[2]}.json 1", None),

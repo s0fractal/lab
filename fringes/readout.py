@@ -10,13 +10,24 @@ Every decoder but the oracle learns on the calibration set only:
   oracle   LDA on one half of the test cell (the old probe): a diagnostic bound, not a decoder
 All five are scored on the same other half of the test cell.
 Also per sigma: the mean of D and of the kinetic sensor K = <P^2> on the test set, so their use as thermometers shows.
-Usage: readout.py LAB CKPT OUT [n] [threads]"""
+Usage: readout.py LAB CKPT OUT [n] [threads] [--decoder DEC.npz]
+--decoder also writes the fitted decoders, which transfer.py scores on unseen data instead of refitting them: pooled,
+the sensor-bin edges with one LDA per bin, one LDA per calibration sigma, and the pooled and sensor decoders fit on
+sigma <= 0.6 only (transfer.py's out-of-range test), with the mean calibration sensor per sigma. The JSON is the same
+with or without it. The file is a plain npz with a fixed timestamp, so the same decoder gives the same bytes."""
+import io
 import json
 import sys
+import zipfile
 
 import numpy as np
 import torch
 
+dec_out = None
+if "--decoder" in sys.argv:
+    i = sys.argv.index("--decoder")
+    dec_out = sys.argv[i + 1]
+    del sys.argv[i:i + 2]
 LAB, ckpt, out = sys.argv[1], sys.argv[2], sys.argv[3]
 n = int(sys.argv[4]) if len(sys.argv) > 4 else 2048
 torch.set_num_threads(int(sys.argv[5]) if len(sys.argv) > 5 else 1)
@@ -64,15 +75,29 @@ def lda_predict(model_, z):
     return (z @ W + b).argmax(1)
 
 
+def fit_sensor(sigmas):
+    """Pooled LDA, sensor-bin edges and one LDA per bin, from the calibration cells of these sigmas."""
+    Zc = np.concatenate([cal[s][0] for s in sigmas])
+    Yc = np.concatenate([cal[s][2] for s in sigmas])
+    Dc = np.concatenate([cal[s][3] for s in sigmas])
+    edges_ = np.quantile(Dc, np.linspace(0, 1, 17)[1:-1])            # 16 bins of the sensor, from calibration only
+    bins = np.digitize(Dc, edges_)
+    return lda_fit(Zc, Yc), edges_, [lda_fit(Zc[bins == k], Yc[bins == k]) for k in range(16)]
+
+
+def save_npz(path, arrays):
+    """np.savez, but with a fixed timestamp and no compression: the bytes depend on the arrays only."""
+    with zipfile.ZipFile(path, "w", zipfile.ZIP_STORED) as zf:
+        for name, a in arrays.items():
+            buf = io.BytesIO()
+            np.lib.format.write_array(buf, np.asanyarray(a), allow_pickle=False)
+            zf.writestr(zipfile.ZipInfo(f"{name}.npy", date_time=(1980, 1, 1, 0, 0, 0)), buf.getvalue())
+
+
 cal = {s: states(s, "calib-readout") for s in SIG}
 test = {s: states(s, "play") for s in SIG}
-Zc = np.concatenate([cal[s][0] for s in SIG])
-Yc = np.concatenate([cal[s][2] for s in SIG])
-Dc = np.concatenate([cal[s][3] for s in SIG])
-pooled = lda_fit(Zc, Yc)
-edges = np.quantile(Dc, np.linspace(0, 1, 17)[1:-1])                 # 16 bins of the sensor, from calibration only
-bins = np.digitize(Dc, edges)
-per_bin = [lda_fit(Zc[bins == k], Yc[bins == k]) for k in range(16)]
+pooled, edges, per_bin = fit_sensor(SIG)
+cells = {}
 rows = []
 for s in SIG:
     z, fixed_pred, y, D, Kin = test[s]
@@ -81,7 +106,7 @@ for s in SIG:
     for k in range(16):
         if (tb == k).any():
             sensor_pred[tb == k] = lda_predict(per_bin[k], z[tb == k])
-    sig_model = lda_fit(cal[s][0], cal[s][2])
+    sig_model = cells[s] = lda_fit(cal[s][0], cal[s][2])
     half = len(y) // 2
     oracle = lda_fit(z[:half], y[:half])
     ev = slice(half, None)                                             # every decoder is scored on the same half
@@ -93,3 +118,14 @@ for s in SIG:
     print(json.dumps(row), flush=True)
 json.dump({"ckpt": ckpt, "kind": c["kind"], "seed": c["seed"], "n": n, "bins": 16, "edges": edges.tolist(), "rows": rows},
           open(out, "w"), indent=1)
+if dec_out:
+    low = [s for s in SIG if s <= 0.6]
+    low_pooled, low_edges, low_bins = fit_sensor(low)
+    arrays = {"sigmas": np.array(SIG), "edges": edges, "D_cal": np.array([float(cal[s][3].mean()) for s in SIG]),
+              "low_sigmas": np.array(low), "low_edges": low_edges}
+    models = ([("pooled", pooled), ("low_pooled", low_pooled)] + [(f"bin{k:02d}", m) for k, m in enumerate(per_bin)]
+              + [(f"low_bin{k:02d}", m) for k, m in enumerate(low_bins)]
+              + [(f"cell{i:02d}", cells[s]) for i, s in enumerate(SIG)])
+    for name, (W, b) in models:
+        arrays[f"{name}_W"], arrays[f"{name}_b"] = W, b
+    save_npz(dec_out, arrays)
