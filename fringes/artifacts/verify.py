@@ -29,6 +29,9 @@ A stage runs when its inputs are in the snapshot; a checkpoint or export it need
             largest gap seen): the replay must stay inside the sampling noise of the frozen estimate, while the
             decoders the README compares differ by 4 standard errors or more. D and
             K agree within 1e-3 relative, 50 times finer than their change between neighbouring sigmas
+  decoder   every transfer result was made with the frozen readout.py decoder: its sensor-bin edges equal those of
+            artifacts/readout-2026-10-28 for the same model (to 1e-6) and its own calibration check is recorded
+            (Codex review of #8, 1dec5d4: another seed format had drawn other calibration states and refit it)
   transfer  transfer.py --cells replays the model's own readout and the oracle at sigma = 0 for T = 24 and 48 (Soliton
             and Pure, seed 900): the time-locked readout, within one binomial standard error of 512 (at least 3)
   clocklaw  clocklaw.py replays Soliton seed 900 at T = 48: the overlap r(sigma) and the norm at all 25 sigmas within
@@ -58,6 +61,7 @@ ONLY = sys.argv[sys.argv.index("--only") + 1].split(",") if "--only" in sys.argv
 TMP = os.path.join(FR, "runs", "verify")
 os.makedirs(TMP, exist_ok=True)
 PR7 = os.path.join(HERE, "pr7-2026-10-28")
+READOUT = os.path.join(HERE, "readout-2026-10-28")
 
 # export name -> (checkpoint, export_js mode args); the checkpoint is looked up in this snapshot, then in pr7
 SRC = {"soliton": ("soliton-T032-s900-step04000.pt",), "pure": ("pure-T032-s900-step04000.pt",),
@@ -272,9 +276,10 @@ def bite_readout(files):
 
 
 def bite_transfer():
-    """A flipped byte fails the hashes; a moved overlap (T = 48, sigma 0.60, by 0.1) and a moved readout accuracy
-    (T = 48, sigma 0, by 30 of 512) fail their replays while their neighbours pass; an emptied overlap curve and a
-    shortened T = 24 table fail before any replay."""
+    """A flipped byte fails the hashes; a moved overlap (T = 48, sigma 0.60, by 0.1), a moved readout accuracy
+    (T = 48, sigma 0, by 30 of 512) and a moved sensor-bin edge (Pure seed 901, by 1e-3: a decoder other than the
+    frozen one) fail while their neighbours pass; an emptied overlap curve and a shortened T = 24 table fail before
+    any replay."""
     def copy(name):
         d = os.path.join(TMP, name)
         shutil.rmtree(d, ignore_errors=True)
@@ -290,15 +295,20 @@ def bite_transfer():
     poison_json(os.path.join(b, cl), lambda d: d["T48"]["r"].__setitem__(12, d["T48"]["r"][12] + 0.1))
     poison_json(os.path.join(b, tr), lambda d: d["T48"][0].__setitem__("fixed", d["T48"][0]["fixed"] + 30 / 512))
     rehash(b, [cl, tr])
+    poison_json(os.path.join(b, "results/transfer/pure-s901.json"),
+                lambda d: d["edges"].__setitem__(7, d["edges"][7] + 1e-3))
+    rehash(b, ["results/transfer/pure-s901.json"])
     e = copy("bite-empty-ref")
     poison_json(os.path.join(e, cl), lambda d: d["T48"].__setitem__("r", []))
     poison_json(os.path.join(e, tr), lambda d: d.__setitem__("T24", d["T24"][:-1]))
     rehash(e, [cl, tr])
     plans = [(a, "hashes", []),
-             (b, "hashes,clocklaw,transfer", ["BAD clocklaw soliton s900 T48 sigma 0.60",
-                                               "ok  clocklaw soliton s900 T48 sigma 0.55",
-                                               "BAD transfer soliton s900 T48 sigma 0.00",
-                                               "ok  transfer soliton s900 T24 sigma 0.00", "ok  SHA-256"]),
+             (b, "hashes,decoder,clocklaw,transfer", ["BAD clocklaw soliton s900 T48 sigma 0.60",
+                                                       "ok  clocklaw soliton s900 T48 sigma 0.55",
+                                                       "BAD transfer soliton s900 T48 sigma 0.00",
+                                                       "ok  transfer soliton s900 T24 sigma 0.00",
+                                                       "BAD decoder pure s901", "ok  decoder pure s900",
+                                                       "ok  SHA-256"]),
              (e, "hashes,clocklaw,transfer", ["BAD clocklaw soliton s900: the frozen reference",
                                                "BAD transfer soliton s900: the frozen reference", "ok  SHA-256"])]
     failed = []
@@ -503,6 +513,19 @@ if (FULL or (ONLY and "readout" in ONLY)) and "results/readout/soliton-s900.json
                   f"readout soliton s900 sigma {row['sigma']:.2f}: sensor {row['sensor']:.4f} (frozen {w['sensor']:.4f}), "
                   f"tightest {k_bad} gap {gaps[k_bad]:.0f} of bound {tol[k_bad]:.1f}, D and K off by "
                   f"{max(rel.values()):.1e}")
+
+# the transfer decoders must be the frozen readout.py ones
+if stage("decoder") and "results/transfer/soliton-s900.json" in by_path:
+    for kind in ("soliton", "pure"):
+        for seed in (900, 901, 902):
+            t = json.load(open(os.path.join(SNAP, f"results/transfer/{kind}-s{seed}.json")))
+            ref_path = os.path.join(READOUT, f"results/readout/{kind}-s{seed}.json")
+            e_t, e_r = t.get("edges"), json.load(open(ref_path)).get("edges") if os.path.exists(ref_path) else None
+            ok = isinstance(e_t, list) and isinstance(e_r, list) and len(e_t) == len(e_r) == 15 and finite(*e_t, *e_r)
+            gap = max(abs(a - b) for a, b in zip(e_t, e_r)) if ok else float("inf")
+            cc = t.get("calibration_check", {})
+            ok = ok and gap <= 1e-6 and finite(cc.get("edges"), cc.get("D_cal")) and max(cc["edges"], cc["D_cal"]) <= 1e-6
+            check(ok, f"decoder {kind} s{seed}: sensor-bin edges match the frozen readout decoder (off by {gap:.1e})")
 
 # transfer replay: the time-locked readout at sigma = 0 for T = 24 and 48
 if stage("transfer") and "results/transfer/soliton-s900.json" in by_path:

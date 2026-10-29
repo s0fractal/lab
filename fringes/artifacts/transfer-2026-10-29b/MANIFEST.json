@@ -1,7 +1,7 @@
 {
- "snapshot": "transfer-2026-10-29",
+ "snapshot": "transfer-2026-10-29b",
  "what": "post hoc fringes runs behind fringes/README.md; not part of the phs-soliton PREREG v1 verdict",
- "source_commit": "3ab92a8d37292497763ba707dd456b51f469a2da",
+ "source_commit": "22f8dde3f9b6d7deb08890700d4663fbc07b43e4",
  "source_note": "the code at this commit; earlier files were made by earlier versions of the same scripts (see status for the two corrected measurements)",
  "environment": {
   "python": "3.13.17",
@@ -63,51 +63,51 @@
   },
   {
    "path": "results/transfer/pure-s900.json",
-   "role": "frozen decoders on unseen data (README: transfer)",
-   "made_by": "transfer.py LAB artifacts/pr7-2026-10-28/checkpoints/pure-T032-s900-step04000.pt runs/transfer/pure-s900.json 1",
-   "from": "runs/transfer/pure-s900.json",
-   "bytes": 13192,
-   "sha256": "ebc2609188709379f6255d887d43dc2ae47d7d014e2483d9b14de80afa2621bc"
+   "role": "the frozen readout.py decoders on unseen data (README: transfer); calibration checked against artifacts/readout-2026-10-28",
+   "made_by": "transfer.py LAB artifacts/pr7-2026-10-28/checkpoints/pure-T032-s900-step04000.pt runs/transfer2/pure-s900.json 1",
+   "from": "runs/transfer2/pure-s900.json",
+   "bytes": 13616,
+   "sha256": "998e71bb190286119a86527106f67f54a19550989a3c9614fa8cce3ca83e8057"
   },
   {
    "path": "results/transfer/pure-s901.json",
-   "role": "frozen decoders on unseen data (README: transfer)",
-   "made_by": "transfer.py LAB artifacts/pr7-2026-10-28/checkpoints/pure-T032-s901-step04000.pt runs/transfer/pure-s901.json 1",
-   "from": "runs/transfer/pure-s901.json",
-   "bytes": 13153,
-   "sha256": "beb37a5ac18b3c847677f88a9338db889390464072b43cf35824744c349d2b74"
+   "role": "the frozen readout.py decoders on unseen data (README: transfer); calibration checked against artifacts/readout-2026-10-28",
+   "made_by": "transfer.py LAB artifacts/pr7-2026-10-28/checkpoints/pure-T032-s901-step04000.pt runs/transfer2/pure-s901.json 1",
+   "from": "runs/transfer2/pure-s901.json",
+   "bytes": 13523,
+   "sha256": "c54d82ccf079491c52710eeeb7f1ff0797eb81f1a92fc28f906101314c23c348"
   },
   {
    "path": "results/transfer/pure-s902.json",
-   "role": "frozen decoders on unseen data (README: transfer)",
-   "made_by": "transfer.py LAB artifacts/pr7-2026-10-28/checkpoints/pure-T032-s902-step04000.pt runs/transfer/pure-s902.json 1",
-   "from": "runs/transfer/pure-s902.json",
-   "bytes": 13113,
-   "sha256": "422df381c43f26a8a221a83358aa65f72c5b0ea6aafb547abfbf3c3219b77f0e"
+   "role": "the frozen readout.py decoders on unseen data (README: transfer); calibration checked against artifacts/readout-2026-10-28",
+   "made_by": "transfer.py LAB artifacts/pr7-2026-10-28/checkpoints/pure-T032-s902-step04000.pt runs/transfer2/pure-s902.json 1",
+   "from": "runs/transfer2/pure-s902.json",
+   "bytes": 13515,
+   "sha256": "a66c2e3c89f73b436f1aa94f7299c6113dcedcef6eee5acbeaa7ff16a6e8821a"
   },
   {
    "path": "results/transfer/soliton-s900.json",
-   "role": "frozen decoders on unseen data (README: transfer)",
-   "made_by": "transfer.py LAB artifacts/pr7-2026-10-28/checkpoints/soliton-T032-s900-step04000.pt runs/transfer/soliton-s900.json 1",
-   "from": "runs/transfer/soliton-s900.json",
-   "bytes": 13102,
-   "sha256": "d62e3bdcda9c27ee95f60493db78669ad469ef90afe37a23afdf1746dc080c81"
+   "role": "the frozen readout.py decoders on unseen data (README: transfer); calibration checked against artifacts/readout-2026-10-28",
+   "made_by": "transfer.py LAB artifacts/pr7-2026-10-28/checkpoints/soliton-T032-s900-step04000.pt runs/transfer2/soliton-s900.json 1",
+   "from": "runs/transfer2/soliton-s900.json",
+   "bytes": 13504,
+   "sha256": "133f55504a8c6d74e45f4373b2ffb9e5273a1bc7fea49fe298b2355d2ecee0f9"
   },
   {
    "path": "results/transfer/soliton-s901.json",
-   "role": "frozen decoders on unseen data (README: transfer)",
-   "made_by": "transfer.py LAB artifacts/pr7-2026-10-28/checkpoints/soliton-T032-s901-step04000.pt runs/transfer/soliton-s901.json 1",
-   "from": "runs/transfer/soliton-s901.json",
-   "bytes": 13067,
-   "sha256": "26b1b7530ae36fd659a2f9da4b382d5b0468eecded202fa9309305806ecc6174"
+   "role": "the frozen readout.py decoders on unseen data (README: transfer); calibration checked against artifacts/readout-2026-10-28",
+   "made_by": "transfer.py LAB artifacts/pr7-2026-10-28/checkpoints/soliton-T032-s901-step04000.pt runs/transfer2/soliton-s901.json 1",
+   "from": "runs/transfer2/soliton-s901.json",
+   "bytes": 13440,
+   "sha256": "a569beca28da32d8ef8a4bbb8f6470db8261955d6dbdb851991de97947e1567c"
   },
   {
    "path": "results/transfer/soliton-s902.json",
-   "role": "frozen decoders on unseen data (README: transfer)",
-   "made_by": "transfer.py LAB artifacts/pr7-2026-10-28/checkpoints/soliton-T032-s902-step04000.pt runs/transfer/soliton-s902.json 1",
-   "from": "runs/transfer/soliton-s902.json",
-   "bytes": 13053,
-   "sha256": "17205e78f41298c80e10286e06b1a5ce416457173dabef8e8a740e877708c9d9"
+   "role": "the frozen readout.py decoders on unseen data (README: transfer); calibration checked against artifacts/readout-2026-10-28",
+   "made_by": "transfer.py LAB artifacts/pr7-2026-10-28/checkpoints/soliton-T032-s902-step04000.pt runs/transfer2/soliton-s902.json 1",
+   "from": "runs/transfer2/soliton-s902.json",
+   "bytes": 13425,
+   "sha256": "b7951ef8a88a3634fc370d36e68ea3c02c7be215a858cc048b9ca56425b93687"
   }
  ]
 }

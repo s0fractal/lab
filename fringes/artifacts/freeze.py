@@ -136,7 +136,13 @@ SPECS = [
                f"runs/readout/{m[1]}-s{m[2]}.json 2048 1", None),
     (r"transfer/(soliton|pure)-s(\d+)\.json", "results/transfer", "frozen decoders on unseen data (README: transfer)",
      lambda m: f"transfer.py LAB artifacts/pr7-2026-10-28/checkpoints/{m[1]}-T032-s{m[2]}-step04000.pt "
-               f"runs/transfer/{m[1]}-s{m[2]}.json 1", None),
+               f"runs/transfer/{m[1]}-s{m[2]}.json 1",
+     lambda m: {"superseded_by": "transfer-2026-10-29b", "note": "calibration seeded as 0.700, not readout.py's 0.70: "
+                "another decoder than the frozen one (Codex review of #8, 1dec5d4)"}),
+    (r"transfer2/(soliton|pure)-s(\d+)\.json", "results/transfer", "the frozen readout.py decoders on unseen data "
+     "(README: transfer); calibration checked against artifacts/readout-2026-10-28",
+     lambda m: f"transfer.py LAB artifacts/pr7-2026-10-28/checkpoints/{m[1]}-T032-s{m[2]}-step04000.pt "
+               f"runs/transfer2/{m[1]}-s{m[2]}.json 1", None),
     (r"clocklaw/(soliton|pure)-s(\d+)\.json", "results/clocklaw", "clock law without a readout (README: transfer)",
      lambda m: f"clocklaw.py LAB artifacts/pr7-2026-10-28/checkpoints/{m[1]}-T032-s{m[2]}-step04000.pt "
                f"runs/clocklaw/{m[1]}-s{m[2]}.json 1", None),

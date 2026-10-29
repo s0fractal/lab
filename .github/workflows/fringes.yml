@@ -36,6 +36,6 @@ jobs:
       - name: the decoder check must be able to fail
         run: phs-soliton/.venv/bin/python fringes/artifacts/verify.py fringes/artifacts/readout-2026-10-28 --bite
       - name: transfer and clock law, replayed from the frozen checkpoints
-        run: phs-soliton/.venv/bin/python fringes/artifacts/verify.py fringes/artifacts/transfer-2026-10-29
+        run: phs-soliton/.venv/bin/python fringes/artifacts/verify.py fringes/artifacts/transfer-2026-10-29b
       - name: the transfer check must be able to fail
-        run: phs-soliton/.venv/bin/python fringes/artifacts/verify.py fringes/artifacts/transfer-2026-10-29 --bite
+        run: phs-soliton/.venv/bin/python fringes/artifacts/verify.py fringes/artifacts/transfer-2026-10-29b --bite
