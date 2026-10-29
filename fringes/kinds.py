@@ -11,10 +11,12 @@ namespaces "decouple" and "decouple-cal"): the model's own readout; the LDA of t
 set of the same protocol (knows sigma); the class signal c of the final z, its overlap r with the sigma = 0 signal of the
 same protocol and its norm; at sigma = 0, after every token, |c(t)| and the overlap of c(t) with c(3); at sigma = 0.6,
 after every token, r(t).
-Usage: kinds.py LAB CKPT OUT [threads] [--selftest | --scales | --only NAME,... --sigmas S,...]
+Usage: kinds.py LAB CKPT OUT [threads] [--selftest | --scales | --momenta | --only NAME,... --sigmas S,...]
 --selftest: with no pulse the loop gives the model's own logits bit for bit (sigma 0 and 0.6); a PJ train gives
 decouple.py's run bit for bit; a J and a P pulse each change the logits; the off field is the identity. --scales prints
-the per-token timescales of the checkpoint (no protocol is run). --only and --sigmas run a subset (sigma 0 first)."""
+the per-token timescales of the checkpoint (no protocol is run). --momenta (post hoc, after the runs) prints the mean
+squared momenta over the hold without pulses at sigma 0 and 0.6, against the thermal level 0.6^2 <m> (512 sequences).
+--only and --sigmas run a subset (sigma 0 first)."""
 import dataclasses
 import json
 import sys
@@ -87,6 +89,18 @@ if "--scales" in sys.argv:
           f"{core.gamma * core.dt:.2f}; field |w| dt median {float(w.median()) * core.dt:.2f}, max "
           f"{float(w.max()) * core.dt:.2f}; the token's rotation turns by up to {float(turn.abs().max()):.2f} rad; "
           f"pinning stiffness g_pin m_pin^2 dt^2 / <m> {pin:.2f}")
+    sys.exit(0)
+
+if "--momenta" in sys.argv:                 # post hoc: why a J pulse alone is almost a PJ pulse at sigma = 0
+    m = float(model.core.physics().mass.mean().detach())
+    p2 = {}
+    for s in (0.0, 0.6):
+        x, tg, sg = to_torch(tasks.test_set("A", T, s, n=512, namespace="decouple"))
+        zs, _ = run(x, sg, tasks.derive_seed("decouple-noise", T, f"{s:.2f}"), "PJ", (), every=True)
+        p2[s] = float(np.mean([(z.reshape(len(z), model.N, 3 * model.d)[..., 2 * model.d:].double() ** 2).mean()
+                               for z in zs[10:]]))
+    print(f"{ns['c']['kind']} s{ns['c']['seed']}: <P^2> over tokens 10-127 without pulses, against the thermal level "
+          f"0.6^2 <m> = {0.36 * m:.3f}: sigma 0 {p2[0.0] / (0.36 * m):.3f}, sigma 0.6 {p2[0.6] / (0.36 * m):.3f}")
     sys.exit(0)
 
 if "--selftest" in sys.argv:

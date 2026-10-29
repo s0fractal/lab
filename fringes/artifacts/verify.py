@@ -73,10 +73,15 @@ A stage runs when its inputs are in the snapshot; a checkpoint or export it need
             Soliton seed 900: the model's own readout within one binomial standard error of 1024 (at least 3), the
             overlap r and the norm within 0.01, and the overlap of the paused signal with none32 within 0.01
   kinds     kinds.py --selftest on Soliton and Pure seed 900 (no pulse of any kind leaves the model, a PJ train is
-            decouple.py's run bit for bit, a J pulse, a P pulse and no field bite), then kinds.py --only J63,P63
-            --sigmas 0.0,0.6 on Soliton seed 900: the model's own readout within one binomial standard error of 1024
-            (at least 3), the same-sigma LDA (refit) within three, the overlap r and the norm within 0.01
-            (artifacts/drift.py --kinds measures how far the last bits move them)
+            decouple.py's run bit for bit, a J pulse, a P pulse and no field bite), then kinds.py --only J21,J63,P63
+            --sigmas 0.0,0.6 on Soliton seed 900. At sigma = 0 these cells do not move under the last bits
+            (artifacts/drift.py --kinds: one to ten float32 ulps of noise on the weights move the own readout by at
+            most 0.26 standard errors, the refit LDA by 0.52, r and the norm by 0): the own readout within one
+            binomial standard error of 1024 (at least 3), the LDA within three, r and the norm within 0.01. At sigma
+            = 0.6 the half pulses do not hold the signal and the last bits redraw the trajectories: the same noise
+            moved the own readout by up to 2.8 standard errors, the LDA by 3.1, r by 0.069 and the norm by 0.064, so
+            a replay there is a fresh draw: both accuracies within 4.5 standard errors (two independent draws differ
+            by sqrt 2 of one), r and the norm within 0.15
   --bite    the check must be able to fail, on copies with the manifest updated to match each change: one flipped
             byte (manifest left alone) must fail the hashes; a frozen result moved by one sequence must fail its
             replay; poisoned numbers (NaN, +inf, -inf, the literal 1e400 that a float parser makes inf, a large finite
@@ -588,8 +593,10 @@ def bite_pause():
 
 def bite_kinds():
     """A flipped byte fails the hashes. A copy with the manifest updated has the frozen J63 memory (sigma 0,
-    same-sigma LDA) raised by 60 of 1024 and the P63 overlap at sigma 0.6 by 0.1: both must fail while J63 at
-    sigma 0.6 and P63 at sigma 0 pass; a copy without the J21 row must fail before any replay."""
+    same-sigma LDA) raised by 60 of 1024 (3.8 of its standard errors, outside three) and the P63 overlap at sigma
+    0.6 by 0.3 (outside 0.15): both must fail; the J21 own readout at sigma 0.6 is moved by three standard errors,
+    inside the 4.5 of a redrawn cell, and must pass with P63 at sigma 0; a copy without the J21 row must fail
+    before any replay."""
     def copy(name):
         d = os.path.join(TMP, name)
         shutil.rmtree(d, ignore_errors=True)
@@ -605,7 +612,9 @@ def bite_kinds():
 
     def move(d):
         d["J63"]["aware"][0] += 60 / 1024
-        d["P63"]["r"][2] += 0.1
+        d["P63"]["r"][2] += 0.3
+        w = d["J21"]["own"][2]
+        d["J21"]["own"][2] = w + 3 * max(3.0, math.sqrt(w * (1 - w) * 1024)) / 1024
     poison_json(os.path.join(b, ref), move)
     rehash(b, [ref])
     e = copy("bite-empty-ref")
@@ -613,7 +622,7 @@ def bite_kinds():
     rehash(e, [ref])
     plans = [(a, "hashes", []),
              (b, "hashes,kinds", ["BAD kinds soliton s900 J63 sigma 0.00", "BAD kinds soliton s900 P63 sigma 0.60",
-                                  "ok  kinds soliton s900 J63 sigma 0.60", "ok  kinds soliton s900 P63 sigma 0.00",
+                                  "ok  kinds soliton s900 J21 sigma 0.60", "ok  kinds soliton s900 P63 sigma 0.00",
                                   "ok  SHA-256"]),
              (e, "hashes,kinds", ["BAD kinds soliton s900: the frozen reference", "ok  SHA-256"])]
     failed = []
@@ -1094,7 +1103,7 @@ if stage("pause") and "results/pause/soliton-s900.json" in by_path:
             check(finite(o_new, o_old) and abs(o_new - o_old) <= 0.01,
                   f"pause soliton s900: overlap of the paused signal with none32 {o_new} (frozen {o_old})")
 
-# which pulse holds the clock: the selftests, then J63 and P63 at sigma 0 and 0.6
+# which pulse holds the clock: the selftests, then J21, J63 and P63 at sigma 0 and 0.6
 if stage("kinds") and "results/kinds/soliton-s900.json" in by_path:
     for kind in ("soliton", "pure"):
         r = run("-I", "kinds.py", LAB, find("checkpoints", f"{kind}-T032-s900-step04000.pt"), os.devnull, "2",
@@ -1112,22 +1121,25 @@ if stage("kinds") and "results/kinds/soliton-s900.json" in by_path:
         print(f"--  kinds replay on {cpu_name()}", flush=True)
         out = os.path.join(TMP, "kinds-soliton-s900.json")
         r = run("-I", "kinds.py", LAB, find("checkpoints", "soliton-T032-s900-step04000.pt"), out, "2",
-                "--only", "J63,P63", "--sigmas", "0.0,0.6")
+                "--only", "J21,J63,P63", "--sigmas", "0.0,0.6")
         new = json.load(open(out)) if r.returncode == 0 else {}
-        if new.get("sigma") != [0.0, 0.6] or any(nm not in new for nm in ("J63", "P63")):
-            check(False, "kinds soliton s900: the replay did not return J63 and P63 at sigma 0 and 0.6")
+        if new.get("sigma") != [0.0, 0.6] or any(nm not in new for nm in ("J21", "J63", "P63")):
+            check(False, "kinds soliton s900: the replay did not return J21, J63 and P63 at sigma 0 and 0.6")
         else:
-            for nm in ("J63", "P63"):
+            for nm in ("J21", "J63", "P63"):
                 for i, s_ in enumerate((0.0, 0.6)):
                     a, w, j = new[nm], frozen[nm], grid.index(s_)
                     keys = ("own", "aware", "r", "norm")
                     if not all(finite(a[k][i], w[k][j]) for k in keys):
                         check(False, f"kinds soliton s900 {nm} sigma {s_:.2f}: nonfinite value")
                         continue
-                    acc = {k: abs(a[k][i] - w[k][j]) * 1024 / max(3.0, math.sqrt(w[k][j] * (1 - w[k][j]) * 1024)
-                                                                   * (3 if k == "aware" else 1)) for k in ("own", "aware")}
-                    ok = max(acc.values()) <= 1 and abs(a["r"][i] - w["r"][j]) <= 0.01 and \
-                        abs(a["norm"][i] - w["norm"][j]) <= 0.01
+                    # sigma = 0 does not move; at sigma = 0.6 the replay is a fresh draw (see the docstring)
+                    se_n = {"own": 1, "aware": 3} if s_ == 0.0 else {"own": 4.5, "aware": 4.5}
+                    tol = 0.01 if s_ == 0.0 else 0.15
+                    acc = {k: abs(a[k][i] - w[k][j]) * 1024 / (max(3.0, math.sqrt(w[k][j] * (1 - w[k][j]) * 1024))
+                                                               * se_n[k]) for k in ("own", "aware")}
+                    ok = max(acc.values()) <= 1 and abs(a["r"][i] - w["r"][j]) <= tol and \
+                        abs(a["norm"][i] - w["norm"][j]) <= tol
                     check(ok, f"kinds soliton s900 {nm} sigma {s_:.2f}: same-sigma LDA {a['aware'][i]:.3f} "
                           f"(frozen {w['aware'][j]:.3f}), r {a['r'][i]:+.3f} (frozen {w['r'][j]:+.3f}), own readout "
                           f"{a['own'][i]:.3f} (frozen {w['own'][j]:.3f})")

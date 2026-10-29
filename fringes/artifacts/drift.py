@@ -9,7 +9,7 @@ another CPU rounds differently), then cells are recomputed with the producer's o
   --decouple   decouple.py's n = 0 and n = 63 at T = 128 and sigma 0, 0.6: the change of the model's own readout and of
                the same-sigma LDA (refit) in standard errors of 1024 (at least 3), and of the overlap r and the
                relative norm, from artifacts/decouple-2026-10-29
-  --kinds      kinds.py's J63 and P63 at sigma 0, 0.6, the same numbers, from artifacts/kinds-2026-10-29
+  --kinds      kinds.py's J21, J63 and P63 at sigma 0, 0.6, the same numbers, from artifacts/kinds-2026-10-29
 Usage: artifacts/drift.py LAB EPS [--decouple | --kinds]   (from fringes/, with the phs-soliton venv's python -I)"""
 import json
 import sys
@@ -55,7 +55,7 @@ if "--kinds" in sys.argv:
     with torch.no_grad():
         for p in ns["model"].parameters():
             p.mul_(1 + eps * torch.randn(p.shape, generator=g, dtype=p.dtype))
-    for name in ("J63", "P63"):
+    for name in ("J21", "J63", "P63"):
         ref = None
         for s in (0.0, 0.6):
             zc, _, _, yc = ns["cell"](name, s, "decouple-cal")

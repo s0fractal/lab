@@ -55,3 +55,7 @@ jobs:
         run: phs-soliton/.venv/bin/python fringes/artifacts/verify.py fringes/artifacts/pause-2026-10-29
       - name: the pause check must be able to fail
         run: phs-soliton/.venv/bin/python fringes/artifacts/verify.py fringes/artifacts/pause-2026-10-29 --bite
+      - name: which pulse holds the clock, replayed from the frozen checkpoints
+        run: phs-soliton/.venv/bin/python fringes/artifacts/verify.py fringes/artifacts/kinds-2026-10-29
+      - name: the pulse-kind check must be able to fail
+        run: phs-soliton/.venv/bin/python fringes/artifacts/verify.py fringes/artifacts/kinds-2026-10-29 --bite

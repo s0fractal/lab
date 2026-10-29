@@ -1,0 +1,65 @@
+{
+ "snapshot": "kinds-2026-10-29",
+ "what": "post hoc fringes runs behind fringes/README.md; not part of the phs-soliton PREREG v1 verdict",
+ "source_commit": "b4c3733d237c30ebcee65767a28079b63688740d",
+ "source_note": "the code at this commit; earlier files were made by earlier versions of the same scripts (see status for the two corrected measurements)",
+ "environment": {
+  "python": "3.13.17",
+  "torch": "2.14.1+cu130",
+  "numpy": "2.5.3",
+  "platform": "Linux-6.18.44-fc-v185-x86_64-with-glibc2.39",
+  "cpu": "Intel(R) Xeon(R) Processor @ 2.80GHz"
+ },
+ "commands_run_from": "fringes/, with LAB = the lab checkout and the phs-soliton venv (uv sync --frozen)",
+ "cfgs": {},
+ "files": [
+  {
+   "path": "results/kinds/pure-s900.json",
+   "role": "which pulse holds the clock: J, P or both (README: J, P or both)",
+   "made_by": "kinds.py LAB artifacts/pr7-2026-10-28/checkpoints/pure-T032-s900-step04000.pt runs/kinds/pure-s900.json 2",
+   "from": "runs/kinds/pure-s900.json",
+   "bytes": 54943,
+   "sha256": "f2409228c98c017f850af03e8f89ad95423feaf4d079dea85f2f24e3dd81065c"
+  },
+  {
+   "path": "results/kinds/pure-s901.json",
+   "role": "which pulse holds the clock: J, P or both (README: J, P or both)",
+   "made_by": "kinds.py LAB artifacts/pr7-2026-10-28/checkpoints/pure-T032-s901-step04000.pt runs/kinds/pure-s901.json 2",
+   "from": "runs/kinds/pure-s901.json",
+   "bytes": 54702,
+   "sha256": "8406195955248901523b921730d1a88904041f07fe25d18992348c8deca14d9b"
+  },
+  {
+   "path": "results/kinds/pure-s902.json",
+   "role": "which pulse holds the clock: J, P or both (README: J, P or both)",
+   "made_by": "kinds.py LAB artifacts/pr7-2026-10-28/checkpoints/pure-T032-s902-step04000.pt runs/kinds/pure-s902.json 2",
+   "from": "runs/kinds/pure-s902.json",
+   "bytes": 54913,
+   "sha256": "9e116c78c51e670886ad6e176ed53c658197e93bebdb6ffb0d3259870223153d"
+  },
+  {
+   "path": "results/kinds/soliton-s900.json",
+   "role": "which pulse holds the clock: J, P or both (README: J, P or both)",
+   "made_by": "kinds.py LAB artifacts/pr7-2026-10-28/checkpoints/soliton-T032-s900-step04000.pt runs/kinds/soliton-s900.json 2",
+   "from": "runs/kinds/soliton-s900.json",
+   "bytes": 55246,
+   "sha256": "324827dcd665ef3633d729bf9e73a154e8565be25834b8deb18197aa6c7b05ad"
+  },
+  {
+   "path": "results/kinds/soliton-s901.json",
+   "role": "which pulse holds the clock: J, P or both (README: J, P or both)",
+   "made_by": "kinds.py LAB artifacts/pr7-2026-10-28/checkpoints/soliton-T032-s901-step04000.pt runs/kinds/soliton-s901.json 2",
+   "from": "runs/kinds/soliton-s901.json",
+   "bytes": 55224,
+   "sha256": "34919abececd3b8c77b55481b7cb274e4ee491aedfcc32a9f41299693353e940"
+  },
+  {
+   "path": "results/kinds/soliton-s902.json",
+   "role": "which pulse holds the clock: J, P or both (README: J, P or both)",
+   "made_by": "kinds.py LAB artifacts/pr7-2026-10-28/checkpoints/soliton-T032-s902-step04000.pt runs/kinds/soliton-s902.json 2",
+   "from": "runs/kinds/soliton-s902.json",
+   "bytes": 55262,
+   "sha256": "4a247476cf0f0bba4b8cc007fdfd7e632b36a9a78ec170bc80faaf9e7426859e"
+  }
+ ]
+}
