@@ -29,6 +29,10 @@ A stage runs when its inputs are in the snapshot; a checkpoint or export it need
             largest gap seen): the replay must stay inside the sampling noise of the frozen estimate, while the
             decoders the README compares differ by 4 standard errors or more. D and
             K agree within 1e-3 relative, 50 times finer than their change between neighbouring sigmas
+  transfer  transfer.py --cells replays the model's own readout and the oracle at sigma = 0 for T = 24 and 48 (Soliton
+            and Pure, seed 900): the time-locked readout, within one binomial standard error of 512 (at least 3)
+  clocklaw  clocklaw.py replays Soliton seed 900 at T = 48: the overlap r(sigma) and the norm at all 25 sigmas within
+            0.01, the first zero sigma0 within 0.005 (averages of 1024 float states; another CPU moves them by ~1e-5)
   --bite    the check must be able to fail, on copies with the manifest updated to match each change: one flipped
             byte (manifest left alone) must fail the hashes; a frozen result moved by one sequence must fail its
             replay; poisoned numbers (NaN, +inf, -inf, the literal 1e400 that a float parser makes inf, a large finite
@@ -132,6 +136,8 @@ def bite():
     rounding = "results/rounding/soliton-A7-B7-stochastic.json" in files
     if "results/readout/soliton-s900.json" in files:
         return bite_readout(files)
+    if "results/clocklaw/soliton-s900.json" in files:
+        return bite_transfer()
 
     def doctored(name):
         d = os.path.join(TMP, name)
@@ -247,6 +253,54 @@ def bite_readout(files):
         poison_json(os.path.join(e, target), lambda d, cut=cut: d.__setitem__("rows", cut(d["rows"])))
         rehash(e, [target])
         plans.append((e, "hashes,readout", ["ok  SHA-256", "BAD readout soliton s900: the frozen reference"]))
+    failed = []
+    for d, only, want in plans:
+        r = subprocess.run([PY, os.path.abspath(__file__), d, "--only", only], capture_output=True, text=True)
+        lines = r.stdout.strip().splitlines()
+        missing = [w for w in want if not any(ln.startswith(w) for ln in lines)]
+        ok = r.returncode != 0 and not missing
+        for ln in lines:
+            if want and ln.startswith("BAD"):
+                print(f"      {ln}")
+        if missing:
+            print(f"      missing: {missing}")
+        print(f"{'ok ' if ok else 'BAD'} bite {os.path.basename(d)}: {lines[-1] if lines else r.stderr[-300:]}")
+        if not ok:
+            failed.append(d)
+        shutil.rmtree(d)
+    sys.exit(1 if failed else 0)
+
+
+def bite_transfer():
+    """A flipped byte fails the hashes; a moved overlap (T = 48, sigma 0.60, by 0.1) and a moved readout accuracy
+    (T = 48, sigma 0, by 30 of 512) fail their replays while their neighbours pass; an emptied overlap curve and a
+    shortened T = 24 table fail before any replay."""
+    def copy(name):
+        d = os.path.join(TMP, name)
+        shutil.rmtree(d, ignore_errors=True)
+        shutil.copytree(SNAP, d)
+        return d
+    cl, tr = "results/clocklaw/soliton-s900.json", "results/transfer/soliton-s900.json"
+    a = copy("bite-byte")
+    f = os.path.join(a, cl)
+    raw = bytearray(open(f, "rb").read())
+    raw[len(raw) // 2] ^= 1
+    open(f, "wb").write(raw)
+    b = copy("bite-moved")
+    poison_json(os.path.join(b, cl), lambda d: d["T48"]["r"].__setitem__(12, d["T48"]["r"][12] + 0.1))
+    poison_json(os.path.join(b, tr), lambda d: d["T48"][0].__setitem__("fixed", d["T48"][0]["fixed"] + 30 / 512))
+    rehash(b, [cl, tr])
+    e = copy("bite-empty-ref")
+    poison_json(os.path.join(e, cl), lambda d: d["T48"].__setitem__("r", []))
+    poison_json(os.path.join(e, tr), lambda d: d.__setitem__("T24", d["T24"][:-1]))
+    rehash(e, [cl, tr])
+    plans = [(a, "hashes", []),
+             (b, "hashes,clocklaw,transfer", ["BAD clocklaw soliton s900 T48 sigma 0.60",
+                                               "ok  clocklaw soliton s900 T48 sigma 0.55",
+                                               "BAD transfer soliton s900 T48 sigma 0.00",
+                                               "ok  transfer soliton s900 T24 sigma 0.00", "ok  SHA-256"]),
+             (e, "hashes,clocklaw,transfer", ["BAD clocklaw soliton s900: the frozen reference",
+                                               "BAD transfer soliton s900: the frozen reference", "ok  SHA-256"])]
     failed = []
     for d, only, want in plans:
         r = subprocess.run([PY, os.path.abspath(__file__), d, "--only", only], capture_output=True, text=True)
@@ -449,6 +503,49 @@ if (FULL or (ONLY and "readout" in ONLY)) and "results/readout/soliton-s900.json
                   f"readout soliton s900 sigma {row['sigma']:.2f}: sensor {row['sensor']:.4f} (frozen {w['sensor']:.4f}), "
                   f"tightest {k_bad} gap {gaps[k_bad]:.0f} of bound {tol[k_bad]:.1f}, D and K off by "
                   f"{max(rel.values()):.1e}")
+
+# transfer replay: the time-locked readout at sigma = 0 for T = 24 and 48
+if stage("transfer") and "results/transfer/soliton-s900.json" in by_path:
+    for kind in ("soliton", "pure"):
+        frozen = json.load(open(os.path.join(SNAP, f"results/transfer/{kind}-s900.json")))
+        if any(sigmas(frozen.get(f"T{T}", [])) != GRID["readout"] for T in (24, 48)):
+            check(False, f"transfer {kind} s900: the frozen reference lacks the 25-point grid at T = 24 or 48")
+            continue
+        out = os.path.join(TMP, f"transfer-{kind}-s900.json")
+        r = run("transfer.py", LAB, find("checkpoints", f"{kind}-T032-s900-step04000.pt"), out, "2",
+                "--cells", "24:0.0,48:0.0")
+        cells = json.load(open(out))["cells"] if r.returncode == 0 else []
+        if [(c_["T"], c_["sigma"]) for c_ in cells] != [(24, 0.0), (48, 0.0)]:
+            check(False, f"transfer {kind} s900: the replay returned {len(cells)} cells, asked for 2")
+            continue
+        for c_ in cells:
+            w = frozen[f"T{c_['T']}"][0]
+            ok = all(finite(c_[k], w[k]) for k in ("fixed", "oracle"))
+            gaps = {k: abs(c_[k] - w[k]) * 512 for k in ("fixed", "oracle")} if ok else {}
+            ok = ok and all(gaps[k] <= max(3.0, math.sqrt(w[k] * (1 - w[k]) * 512)) for k in gaps)
+            check(ok, f"transfer {kind} s900 T{c_['T']} sigma 0.00: own readout {c_['fixed']:.3f} (frozen {w['fixed']:.3f}),"
+                  f" oracle {c_['oracle']:.3f} (frozen {w['oracle']:.3f})")
+
+# clock-law replay: the readout-free overlap at T = 48
+if stage("clocklaw") and "results/clocklaw/soliton-s900.json" in by_path:
+    frozen = json.load(open(os.path.join(SNAP, "results/clocklaw/soliton-s900.json")))
+    f48 = frozen.get("T48", {})
+    if len(f48.get("r", [])) != 25 or len(f48.get("norm", [])) != 25 or [round(v, 2) for v in frozen.get("sigma", [])] \
+            != GRID["readout"]:
+        check(False, "clocklaw soliton s900: the frozen reference lacks the 25-point T = 48 curve")
+    else:
+        out = os.path.join(TMP, "clocklaw-soliton-s900.json")
+        r = run("clocklaw.py", LAB, find("checkpoints", "soliton-T032-s900-step04000.pt"), out, "2", "48")
+        new = json.load(open(out)).get("T48", {}) if r.returncode == 0 else {}
+        if len(new.get("r", [])) != 25:
+            check(False, "clocklaw soliton s900: the replay returned no 25-point T = 48 curve")
+        else:
+            for i, s_ in enumerate(GRID["readout"]):
+                vals = (new["r"][i], f48["r"][i], new["norm"][i], f48["norm"][i])
+                ok = finite(*vals) and abs(vals[0] - vals[1]) <= 0.01 and abs(vals[2] - vals[3]) <= 0.01
+                check(ok, f"clocklaw soliton s900 T48 sigma {s_:.2f}: r {vals[0]:+.3f} (frozen {vals[1]:+.3f})")
+            z0, z1 = new.get("sigma0"), f48.get("sigma0")
+            check(finite(z0, z1) and abs(z0 - z1) <= 0.005, f"clocklaw soliton s900 T48: first zero {z0} (frozen {z1})")
 
 print(f"verify {man['snapshot']}: {'FAILED: ' + '; '.join(bad) if bad else 'ok'}")
 sys.exit(1 if bad else 0)

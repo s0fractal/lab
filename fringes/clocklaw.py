@@ -4,7 +4,7 @@ signal c(sigma, T) of the full state z_T (class means minus their mean) and its 
 the same T: r(sigma, T) = <c(sigma, T), c(0, T)> / (|c(sigma, T)| |c(0, T)|). Its first zero in sigma, sigma0(T)
 (linear between grid points), is the temperature part of the memory phase, free of the part the hold time adds at
 sigma = 0. Also |c(sigma, T)| / |c(0, T)| and, across T, the overlap of the sigma = 0 signals with the one at T = 32.
-Usage: clocklaw.py LAB CKPT OUT [threads]"""
+Usage: clocklaw.py LAB CKPT OUT [threads] [T list]   (T list, e.g. 48, replays a subset; artifacts/verify.py does)"""
 import json
 import sys
 
@@ -13,6 +13,7 @@ import torch
 
 LAB, ckpt, out = sys.argv[1], sys.argv[2], sys.argv[3]
 torch.set_num_threads(int(sys.argv[4]) if len(sys.argv) > 4 else 1)
+TS = [int(v) for v in sys.argv[5].split(",")] if len(sys.argv) > 5 else [24, 32, 48]
 sys.path.insert(0, f"{LAB}/phs-soliton")
 from phs import tasks  # noqa: E402
 from phs.models import build  # noqa: E402
@@ -48,13 +49,15 @@ def first_zero(sig, r):
 
 res = {"ckpt": ckpt, "kind": c["kind"], "seed": c["seed"], "n": 1024, "sigma": GRID}
 c0 = {}
-for T in (24, 32, 48):
+for T in TS:
     cs = [signal(s, T) for s in GRID]
     c0[T] = cs[0]
     r = [float(v @ cs[0] / (np.linalg.norm(v) * np.linalg.norm(cs[0]))) for v in cs]
     rel = [float(np.linalg.norm(v) / np.linalg.norm(cs[0])) for v in cs]
     res[f"T{T}"] = {"r": r, "norm": rel, "sigma0": first_zero(GRID, r)}
     print(T, "sigma0", res[f"T{T}"]["sigma0"], " ".join(f"{s:.2f}:{a:+.2f}" for s, a in zip(GRID[::2], r[::2])), flush=True)
-res["cross_T"] = {f"T{T}": float(c0[T] @ c0[32] / (np.linalg.norm(c0[T]) * np.linalg.norm(c0[32]))) for T in (24, 48)}
-print("sigma = 0 signal overlap with T = 32:", res["cross_T"], flush=True)
+if 32 in TS:
+    res["cross_T"] = {f"T{T}": float(c0[T] @ c0[32] / (np.linalg.norm(c0[T]) * np.linalg.norm(c0[32])))
+                      for T in TS if T != 32}
+    print("sigma = 0 signal overlap with T = 32:", res["cross_T"], flush=True)
 json.dump(res, open(out, "w"), indent=1)

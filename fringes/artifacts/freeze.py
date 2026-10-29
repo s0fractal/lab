@@ -134,6 +134,12 @@ SPECS = [
     (r"readout/(soliton|pure)-s(\d+)\.json", "results/readout", "honest decoders (README: the honest decoder)",
      lambda m: f"readout.py LAB artifacts/pr7-2026-10-28/checkpoints/{m[1]}-T032-s{m[2]}-step04000.pt "
                f"runs/readout/{m[1]}-s{m[2]}.json 2048 1", None),
+    (r"transfer/(soliton|pure)-s(\d+)\.json", "results/transfer", "frozen decoders on unseen data (README: transfer)",
+     lambda m: f"transfer.py LAB artifacts/pr7-2026-10-28/checkpoints/{m[1]}-T032-s{m[2]}-step04000.pt "
+               f"runs/transfer/{m[1]}-s{m[2]}.json 1", None),
+    (r"clocklaw/(soliton|pure)-s(\d+)\.json", "results/clocklaw", "clock law without a readout (README: transfer)",
+     lambda m: f"clocklaw.py LAB artifacts/pr7-2026-10-28/checkpoints/{m[1]}-T032-s{m[2]}-step04000.pt "
+               f"runs/clocklaw/{m[1]}-s{m[2]}.json 1", None),
     (r"(train-(?:soliton|pure)(?:-90[12])?|homeoarch-s\d+|golden-(?:q0|q21|qp-s90\d)|qat-(?:soliton|pure)-A\d)\.log",
      "logs", "training log (loss and accuracy every 100 steps)", lambda m: "the training command of the checkpoint",
      None),

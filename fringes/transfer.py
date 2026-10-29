@@ -9,7 +9,9 @@ then frozen. They are scored on data none of them saw, from a new namespace ("tr
              different time; the model's own readout shows where its anti-memory dip moves
 Decoders: fixed (the model's readout), pooled (one LDA), sensor (16 bins of D = <cos 2 theta>), sigma (LDA of the
 nearest calibration cell; knows sigma, not T), oracle (LDA on one half of the test cell, a bound); all scored on the
-other half. Usage: transfer.py LAB CKPT OUT [threads]"""
+other half. Usage: transfer.py LAB CKPT OUT [threads] [--cells T:sigma,...]
+--cells scores only the model's readout and the oracle on the listed test cells (no calibration, a few seconds each),
+which is what artifacts/verify.py replays."""
 import json
 import sys
 
@@ -86,6 +88,17 @@ def score(dec, cell, sigma):
             "oracle": float((lda_predict(lda_fit(z[:half], y[:half]), z[ev]) == y[ev]).mean()), "D": float(D.mean())}
 
 
+if "--cells" in sys.argv:
+    cells = []
+    for spec_ in sys.argv[sys.argv.index("--cells") + 1].split(","):
+        T, s = spec_.split(":")
+        z, fixed_pred, y, D = states(float(s), "transfer", int(T), 1024)
+        half = len(y) // 2
+        cells.append({"T": int(T), "sigma": float(s), "fixed": float((fixed_pred[half:] == y[half:]).mean()),
+                      "oracle": float((lda_predict(lda_fit(z[:half], y[:half]), z[half:]) == y[half:]).mean())})
+        print(json.dumps(cells[-1]), flush=True)
+    json.dump({"ckpt": ckpt, "cells": cells}, open(out, "w"), indent=1)
+    sys.exit(0)
 cal = {s: states(s, "calib-readout", T0, 2048) for s in GRID}              # the calibration set of readout.py
 full = fit(cal)
 low = fit({s: cal[s] for s in GRID if s <= 0.6})
