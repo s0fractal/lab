@@ -1,0 +1,65 @@
+{
+ "snapshot": "decouple-2026-10-29",
+ "what": "post hoc fringes runs behind fringes/README.md; not part of the phs-soliton PREREG v1 verdict",
+ "source_commit": "85422160e948885c69b40036762d0939f981c1a9",
+ "source_note": "the code at this commit; earlier files were made by earlier versions of the same scripts (see status for the two corrected measurements)",
+ "environment": {
+  "python": "3.13.17",
+  "torch": "2.14.1+cu130",
+  "numpy": "2.5.3",
+  "platform": "Linux-6.18.44-fc-v185-x86_64-with-glibc2.39",
+  "cpu": "Intel(R) Xeon(R) Processor @ 2.80GHz"
+ },
+ "commands_run_from": "fringes/, with LAB = the lab checkout and the phs-soliton venv (uv sync --frozen)",
+ "cfgs": {},
+ "files": [
+  {
+   "path": "results/decouple/pure-s900.json",
+   "role": "dynamical decoupling of the clock memory (README: dynamical decoupling)",
+   "made_by": "decouple.py LAB artifacts/pr7-2026-10-28/checkpoints/pure-T032-s900-step04000.pt runs/decouple/pure-s900.json 1",
+   "from": "runs/decouple/pure-s900.json",
+   "bytes": 55927,
+   "sha256": "6b9133c6fd734cf1bf617783d0a27a34770931d7de9ff3cf9bf980923657bbf0"
+  },
+  {
+   "path": "results/decouple/pure-s901.json",
+   "role": "dynamical decoupling of the clock memory (README: dynamical decoupling)",
+   "made_by": "decouple.py LAB artifacts/pr7-2026-10-28/checkpoints/pure-T032-s901-step04000.pt runs/decouple/pure-s901.json 1",
+   "from": "runs/decouple/pure-s901.json",
+   "bytes": 55833,
+   "sha256": "682b8546ff2f14dcf8459a100bbdf9aaed75d525de2ae8ff437fe4bb0c4f65b1"
+  },
+  {
+   "path": "results/decouple/pure-s902.json",
+   "role": "dynamical decoupling of the clock memory (README: dynamical decoupling)",
+   "made_by": "decouple.py LAB artifacts/pr7-2026-10-28/checkpoints/pure-T032-s902-step04000.pt runs/decouple/pure-s902.json 1",
+   "from": "runs/decouple/pure-s902.json",
+   "bytes": 55812,
+   "sha256": "9d096f674ce6d8b8e71358013a9600866da08b2bbd0be799941c5150b3b63960"
+  },
+  {
+   "path": "results/decouple/soliton-s900.json",
+   "role": "dynamical decoupling of the clock memory (README: dynamical decoupling)",
+   "made_by": "decouple.py LAB artifacts/pr7-2026-10-28/checkpoints/soliton-T032-s900-step04000.pt runs/decouple/soliton-s900.json 1",
+   "from": "runs/decouple/soliton-s900.json",
+   "bytes": 56314,
+   "sha256": "92e99bd31e88dea994892dfd4be0b3e131c4828f4e0eff7d02c38bea545a5053"
+  },
+  {
+   "path": "results/decouple/soliton-s901.json",
+   "role": "dynamical decoupling of the clock memory (README: dynamical decoupling)",
+   "made_by": "decouple.py LAB artifacts/pr7-2026-10-28/checkpoints/soliton-T032-s901-step04000.pt runs/decouple/soliton-s901.json 1",
+   "from": "runs/decouple/soliton-s901.json",
+   "bytes": 56254,
+   "sha256": "064cb829d89a2161aef2d2c04ec1d4655ea7fb9bf04e06496734051a1df1cb79"
+  },
+  {
+   "path": "results/decouple/soliton-s902.json",
+   "role": "dynamical decoupling of the clock memory (README: dynamical decoupling)",
+   "made_by": "decouple.py LAB artifacts/pr7-2026-10-28/checkpoints/soliton-T032-s902-step04000.pt runs/decouple/soliton-s902.json 1",
+   "from": "runs/decouple/soliton-s902.json",
+   "bytes": 56341,
+   "sha256": "60f73597d3f1a553d83db8590532a5a5c87cf3d943cbee3cbcc57385405afad8"
+  }
+ ]
+}
