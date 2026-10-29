@@ -45,7 +45,7 @@ A stage runs when its inputs are in the snapshot; a checkpoint or export it need
   transfer  transfer.py --cells replays the model's own readout and the oracle at sigma = 0 for T = 24 and 48 (Soliton
             and Pure, seed 900): the time-locked readout, within one binomial standard error of 512 (at least 3);
             --full adds the whole transfer.py run of Soliton seed 900 with the frozen decoders (fresh, between, beyond,
-            T = 24 and 48: 60 test cells, about 2 minutes): every accuracy within one binomial standard error of 512
+            T = 24 and 48: 60 test cells, a few minutes): every accuracy within one binomial standard error of 512
             (at least 3), D within 1e-3 relative, the sigma cell, the edges and the calibration check exactly
   clocklaw  clocklaw.py replays Soliton seed 900 at T = 48: the overlap r(sigma) and the norm at all 25 sigmas within
             0.01, the first zero sigma0 within 0.005 (averages of 1024 float states; another CPU moves them by ~1e-5)
