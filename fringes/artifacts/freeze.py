@@ -161,6 +161,10 @@ SPECS = [
     (r"pause/(soliton|pure)-s(\d+)\.json", "results/pause", "a pause button for the clock memory (README: pause)",
      lambda m: f"pause.py LAB artifacts/pr7-2026-10-28/checkpoints/{m[1]}-T032-s{m[2]}-step04000.pt "
                f"runs/pause/{m[1]}-s{m[2]}.json 1", None),
+    (r"kinds/(soliton|pure)-s(\d+)\.json", "results/kinds", "which pulse holds the clock: J, P or both (README: "
+     "J, P or both)",
+     lambda m: f"kinds.py LAB artifacts/pr7-2026-10-28/checkpoints/{m[1]}-T032-s{m[2]}-step04000.pt "
+               f"runs/kinds/{m[1]}-s{m[2]}.json 2", None),
     (r"clocklaw/(soliton|pure)-s(\d+)\.json", "results/clocklaw", "clock law without a readout (README: transfer)",
      lambda m: f"clocklaw.py LAB artifacts/pr7-2026-10-28/checkpoints/{m[1]}-T032-s{m[2]}-step04000.pt "
                f"runs/clocklaw/{m[1]}-s{m[2]}.json 1", None),
