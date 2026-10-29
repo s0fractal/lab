@@ -80,8 +80,11 @@ A stage runs when its inputs are in the snapshot; a checkpoint or export it need
             binomial standard error of 1024 (at least 3), the LDA within three, r and the norm within 0.01. At sigma
             = 0.6 the half pulses do not hold the signal and the last bits redraw the trajectories: the same noise
             moved the own readout by up to 2.8 standard errors, the LDA by 3.1, r by 0.069 and the norm by 0.064, so
-            a replay there is a fresh draw: both accuracies within 4.5 standard errors (two independent draws differ
-            by sqrt 2 of one), r and the norm within 0.15
+            a replay there is a fresh draw: both accuracies within six standard errors, r and the norm within 0.15.
+            The 48 chance-level accuracies of the snapshot (Soliton, sigma 0.6 and 0.9) spread by 0.97 binomial
+            standard errors, but the frozen J63 LDA at sigma 0.6 (0.114) is the lowest of them, 2.7 of that spread
+            below their mean; an AMD EPYC 9V45 runner moved it by 4.0 standard errors, and a fresh draw passes 4.5
+            in about 3 % of runs. Six leaves about 3e-4 there and still parts chance (0.14) from PJ63 (0.53)
   --bite    the check must be able to fail, on copies with the manifest updated to match each change: one flipped
             byte (manifest left alone) must fail the hashes; a frozen result moved by one sequence must fail its
             replay; poisoned numbers (NaN, +inf, -inf, the literal 1e400 that a float parser makes inf, a large finite
@@ -593,10 +596,10 @@ def bite_pause():
 
 def bite_kinds():
     """A flipped byte fails the hashes. A copy with the manifest updated has the frozen J63 memory (sigma 0,
-    same-sigma LDA) raised by 60 of 1024 (3.8 of its standard errors, outside three) and the P63 overlap at sigma
-    0.6 by 0.3 (outside 0.15): both must fail; the J21 own readout at sigma 0.6 is moved by three standard errors,
-    inside the 4.5 of a redrawn cell, and must pass with P63 at sigma 0; a copy without the J21 row must fail
-    before any replay."""
+    same-sigma LDA) raised by 60 of 1024 (3.8 of its standard errors, outside three), the J63 LDA at sigma 0.6 by
+    eight standard errors (outside the six of a redrawn cell) and the P63 overlap at sigma 0.6 by 0.3 (outside
+    0.15): all must fail; the J21 own readout at sigma 0.6 is moved by four standard errors, inside six, and must
+    pass with P63 at sigma 0; a copy without the J21 row must fail before any replay."""
     def copy(name):
         d = os.path.join(TMP, name)
         shutil.rmtree(d, ignore_errors=True)
@@ -613,17 +616,18 @@ def bite_kinds():
     def move(d):
         d["J63"]["aware"][0] += 60 / 1024
         d["P63"]["r"][2] += 0.3
-        w = d["J21"]["own"][2]
-        d["J21"]["own"][2] = w + 3 * max(3.0, math.sqrt(w * (1 - w) * 1024)) / 1024
+        for nm, k, by in (("J21", "own", 4), ("J63", "aware", 8)):        # inside and outside six
+            w = d[nm][k][2]
+            d[nm][k][2] = w + by * max(3.0, math.sqrt(w * (1 - w) * 1024)) / 1024
     poison_json(os.path.join(b, ref), move)
     rehash(b, [ref])
     e = copy("bite-empty-ref")
     poison_json(os.path.join(e, ref), lambda d: d.pop("J21"))
     rehash(e, [ref])
     plans = [(a, "hashes", []),
-             (b, "hashes,kinds", ["BAD kinds soliton s900 J63 sigma 0.00", "BAD kinds soliton s900 P63 sigma 0.60",
-                                  "ok  kinds soliton s900 J21 sigma 0.60", "ok  kinds soliton s900 P63 sigma 0.00",
-                                  "ok  SHA-256"]),
+             (b, "hashes,kinds", ["BAD kinds soliton s900 J63 sigma 0.00", "BAD kinds soliton s900 J63 sigma 0.60",
+                                  "BAD kinds soliton s900 P63 sigma 0.60", "ok  kinds soliton s900 J21 sigma 0.60",
+                                  "ok  kinds soliton s900 P63 sigma 0.00", "ok  SHA-256"]),
              (e, "hashes,kinds", ["BAD kinds soliton s900: the frozen reference", "ok  SHA-256"])]
     failed = []
     for d, only, want in plans:
@@ -1134,7 +1138,7 @@ if stage("kinds") and "results/kinds/soliton-s900.json" in by_path:
                         check(False, f"kinds soliton s900 {nm} sigma {s_:.2f}: nonfinite value")
                         continue
                     # sigma = 0 does not move; at sigma = 0.6 the replay is a fresh draw (see the docstring)
-                    se_n = {"own": 1, "aware": 3} if s_ == 0.0 else {"own": 4.5, "aware": 4.5}
+                    se_n = {"own": 1, "aware": 3} if s_ == 0.0 else {"own": 6, "aware": 6}
                     tol = 0.01 if s_ == 0.0 else 0.15
                     acc = {k: abs(a[k][i] - w[k][j]) * 1024 / (max(3.0, math.sqrt(w[k][j] * (1 - w[k][j]) * 1024))
                                                                * se_n[k]) for k in ("own", "aware")}
