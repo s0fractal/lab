@@ -9,7 +9,9 @@ then frozen. They are scored on data none of them saw, from a new namespace ("tr
              different time; the model's own readout shows where its anti-memory dip moves
 Decoders: fixed (the model's readout), pooled (one LDA), sensor (16 bins of D = <cos 2 theta>), sigma (LDA of the
 nearest calibration cell; knows sigma, not T), oracle (LDA on one half of the test cell, a bound); all scored on the
-other half. Usage: transfer.py LAB CKPT OUT [threads] [--cells T:sigma,...]
+other half. The calibration states are readout.py's own, so the decoders are the frozen ones: the run checks its
+sensor-bin edges and calibration sensor means against artifacts/readout-2026-10-28 and stops if they differ.
+Usage: transfer.py LAB CKPT OUT [threads] [--cells T:sigma,...]
 --cells scores only the model's readout and the oracle on the listed test cells (no calibration, a few seconds each),
 which is what artifacts/verify.py replays."""
 import json
@@ -40,7 +42,10 @@ GRID = [round(0.05 * i, 2) for i in range(25)]
 def states(sigma, namespace, T, n):
     b = tasks.test_set("A", T, sigma, n=n, namespace=namespace)
     x, tg, sg = to_torch(b)
-    seed = tasks.derive_seed(f"{namespace}-noise", T, f"{sigma:.3f}")
+    # the calibration set must be readout.py's, state for state, so its noise seed is formatted as there ("0.70");
+    # the new test cells need three decimals for the halfway sigmas. An earlier version used three decimals for the
+    # calibration too, which drew other calibration states and so refit the decoder (Codex review of #8, 1dec5d4)
+    seed = tasks.derive_seed(f"{namespace}-noise", T, f"{sigma:.2f}" if namespace == "calib-readout" else f"{sigma:.3f}")
     logits = model(x, sg, generator=torch.Generator().manual_seed(seed))
     z = grab["z"].double().numpy()
     zz = z.reshape(len(z), N, 3 * d)                                   # cos | sin | P per node (phs/models.py)
@@ -102,7 +107,16 @@ if "--cells" in sys.argv:
 cal = {s: states(s, "calib-readout", T0, 2048) for s in GRID}              # the calibration set of readout.py
 full = fit(cal)
 low = fit({s: cal[s] for s in GRID if s <= 0.6})
-res = {"ckpt": ckpt, "kind": c["kind"], "seed": c["seed"], "T0": T0, "n_cal": 2048, "n_test": 1024}
+# the decoder must be the frozen one: its sensor-bin edges and the mean sensor of every calibration cell are compared
+# with the readout snapshot, and the run stops if they differ
+ref = json.load(open(f"{LAB}/fringes/artifacts/readout-2026-10-28/results/readout/{c['kind']}-s{c['seed']}.json"))
+d_edges = float(np.max(np.abs(full["edges"] - np.asarray(ref["edges"]))))
+d_dcal = max(abs(float(cal[r["sigma"]][3].mean()) - r["D_cal"]) for r in ref["rows"])
+print(f"calibration matches readout.py: edges off by {d_edges:.1e}, mean calibration sensor off by {d_dcal:.1e}",
+      flush=True)
+assert d_edges <= 1e-6 and d_dcal <= 1e-6, "transfer.py would fit another decoder than the frozen readout.py one"
+res = {"ckpt": ckpt, "kind": c["kind"], "seed": c["seed"], "T0": T0, "n_cal": 2048, "n_test": 1024,
+       "edges": full["edges"].tolist(), "calibration_check": {"edges": d_edges, "D_cal": d_dcal}}
 fresh = {s: states(s, "transfer", T0, 1024) for s in (0.5, 0.6, 0.7, 0.8, 0.9)}
 res["fresh"] = [{"sigma": s, **score(full, fresh[s], s)} for s in fresh]
 res["between"] = [{"sigma": s, **score(full, states(s, "transfer", T0, 1024), s)}
