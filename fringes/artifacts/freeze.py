@@ -158,6 +158,9 @@ SPECS = [
      "(README: dynamical decoupling)",
      lambda m: f"decouple.py LAB artifacts/pr7-2026-10-28/checkpoints/{m[1]}-T032-s{m[2]}-step04000.pt "
                f"runs/decouple/{m[1]}-s{m[2]}.json 1", None),
+    (r"pause/(soliton|pure)-s(\d+)\.json", "results/pause", "a pause button for the clock memory (README: pause)",
+     lambda m: f"pause.py LAB artifacts/pr7-2026-10-28/checkpoints/{m[1]}-T032-s{m[2]}-step04000.pt "
+               f"runs/pause/{m[1]}-s{m[2]}.json 1", None),
     (r"clocklaw/(soliton|pure)-s(\d+)\.json", "results/clocklaw", "clock law without a readout (README: transfer)",
      lambda m: f"clocklaw.py LAB artifacts/pr7-2026-10-28/checkpoints/{m[1]}-T032-s{m[2]}-step04000.pt "
                f"runs/clocklaw/{m[1]}-s{m[2]}.json 1", None),

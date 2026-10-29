@@ -51,3 +51,7 @@ jobs:
         run: phs-soliton/.venv/bin/python fringes/artifacts/verify.py fringes/artifacts/decouple-2026-10-29
       - name: the decoupling check must be able to fail
         run: phs-soliton/.venv/bin/python fringes/artifacts/verify.py fringes/artifacts/decouple-2026-10-29 --bite
+      - name: the pause button, replayed from the frozen checkpoints
+        run: phs-soliton/.venv/bin/python fringes/artifacts/verify.py fringes/artifacts/pause-2026-10-29
+      - name: the pause check must be able to fail
+        run: phs-soliton/.venv/bin/python fringes/artifacts/verify.py fringes/artifacts/pause-2026-10-29 --bite

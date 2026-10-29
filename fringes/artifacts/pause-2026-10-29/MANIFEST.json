@@ -1,0 +1,65 @@
+{
+ "snapshot": "pause-2026-10-29",
+ "what": "post hoc fringes runs behind fringes/README.md; not part of the phs-soliton PREREG v1 verdict",
+ "source_commit": "15d89722900fa6c62c2c0a76de41a1c9cf981b6d",
+ "source_note": "the code at this commit; earlier files were made by earlier versions of the same scripts (see status for the two corrected measurements)",
+ "environment": {
+  "python": "3.13.17",
+  "torch": "2.14.1+cu130",
+  "numpy": "2.5.3",
+  "platform": "Linux-6.18.44-fc-v185-x86_64-with-glibc2.39",
+  "cpu": "Intel(R) Xeon(R) Processor @ 2.80GHz"
+ },
+ "commands_run_from": "fringes/, with LAB = the lab checkout and the phs-soliton venv (uv sync --frozen)",
+ "cfgs": {},
+ "files": [
+  {
+   "path": "results/pause/pure-s900.json",
+   "role": "a pause button for the clock memory (README: pause)",
+   "made_by": "pause.py LAB artifacts/pr7-2026-10-28/checkpoints/pure-T032-s900-step04000.pt runs/pause/pure-s900.json 1",
+   "from": "runs/pause/pure-s900.json",
+   "bytes": 3469,
+   "sha256": "c431b59e5b49ecd3dd3cadecc2bede89cca78f8e777a79127f802aee5e1e06cb"
+  },
+  {
+   "path": "results/pause/pure-s901.json",
+   "role": "a pause button for the clock memory (README: pause)",
+   "made_by": "pause.py LAB artifacts/pr7-2026-10-28/checkpoints/pure-T032-s901-step04000.pt runs/pause/pure-s901.json 1",
+   "from": "runs/pause/pure-s901.json",
+   "bytes": 3426,
+   "sha256": "3d1a95d7d72ef679cf4e541752f9fc4afdade03c11a3761fa1cd61285ad33312"
+  },
+  {
+   "path": "results/pause/pure-s902.json",
+   "role": "a pause button for the clock memory (README: pause)",
+   "made_by": "pause.py LAB artifacts/pr7-2026-10-28/checkpoints/pure-T032-s902-step04000.pt runs/pause/pure-s902.json 1",
+   "from": "runs/pause/pure-s902.json",
+   "bytes": 3440,
+   "sha256": "b4d553a2d7ef5d724cc5c8c20736604b6341fbcf6b36228a234fe9dcdfac650c"
+  },
+  {
+   "path": "results/pause/soliton-s900.json",
+   "role": "a pause button for the clock memory (README: pause)",
+   "made_by": "pause.py LAB artifacts/pr7-2026-10-28/checkpoints/soliton-T032-s900-step04000.pt runs/pause/soliton-s900.json 1",
+   "from": "runs/pause/soliton-s900.json",
+   "bytes": 3503,
+   "sha256": "d63258053279f7eae524b6cae7ee5bb0e6a90605010206a49f4c88441f0f25c0"
+  },
+  {
+   "path": "results/pause/soliton-s901.json",
+   "role": "a pause button for the clock memory (README: pause)",
+   "made_by": "pause.py LAB artifacts/pr7-2026-10-28/checkpoints/soliton-T032-s901-step04000.pt runs/pause/soliton-s901.json 1",
+   "from": "runs/pause/soliton-s901.json",
+   "bytes": 3496,
+   "sha256": "87efa50a5d105db9d1616ba0f533ebb92db6b0a21cba5ff6de80e15387d94b6a"
+  },
+  {
+   "path": "results/pause/soliton-s902.json",
+   "role": "a pause button for the clock memory (README: pause)",
+   "made_by": "pause.py LAB artifacts/pr7-2026-10-28/checkpoints/soliton-T032-s902-step04000.pt runs/pause/soliton-s902.json 1",
+   "from": "runs/pause/soliton-s902.json",
+   "bytes": 3474,
+   "sha256": "b693114754fc673876c8f70cc90d2118605fe9ab32381cf17d7d805d3cc4b55f"
+  }
+ ]
+}

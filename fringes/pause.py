@@ -10,7 +10,9 @@ and sigma 0, 0.1, ..., 1.2 (1024 sequences per cell, namespace "pause"): the mod
 the final state, its overlap r with the sigma = 0 signal of the same protocol, its norm and the first zero of r; and
 the overlap of the sigma = 0 signal of pause128 with that of none32 (does the pause hand the readout the pattern it
 learned?).
-Usage: pause.py LAB CKPT OUT [threads] [--selftest]
+Usage: pause.py LAB CKPT OUT [threads] [--selftest | --only NAME,... --sigmas S,...]
+--only and --sigmas run a subset (sigma 0 first), which is what artifacts/verify.py replays; the cells are the same as
+in the full run (the overlap between protocols needs none32 and pause128 both).
 --selftest: with no pulse the loop gives the model's own logits bit for bit (sigma 0 and 0.6); the pause has 48
 pulses, a zero net turn and ends as trained; one pulse changes the logits (the bite)."""
 import dataclasses
@@ -111,6 +113,10 @@ if "--selftest" in sys.argv:
     ok &= moved > 1e-4
     sys.exit(0 if ok else 1)
 
+if "--only" in sys.argv:
+    PROTOCOLS = {k: PROTOCOLS[k] for k in sys.argv[sys.argv.index("--only") + 1].split(",")}
+    GRID = [float(v) for v in sys.argv[sys.argv.index("--sigmas") + 1].split(",")]
+    assert GRID[0] == 0.0, "r is measured against sigma = 0, so the sigma list starts there"
 res = {"ckpt": ckpt, "kind": c["kind"], "seed": c["seed"], "n": 1024, "sigma": GRID, "pause": list(PAUSE)}
 c0 = {}
 for name, (T, pulses) in PROTOCOLS.items():
@@ -128,7 +134,7 @@ for name, (T, pulses) in PROTOCOLS.items():
     res[name]["sigma0"] = first_zero(GRID, res[name]["r"])
     print(name, "own", " ".join(f"{s:.1f}:{a:.2f}" for s, a in zip(GRID, own)), "sigma_crit",
           res[name]["sigma_crit"], flush=True)
-res["overlap0"] = {"pause128_none32": cos(c0["pause128"], c0["none32"]),
-                   "none128_none32": cos(c0["none128"], c0["none32"])}
+res["overlap0"] = {f"{a}_none32": cos(c0[a], c0["none32"]) for a in ("pause128", "none128")
+                   if a in c0 and "none32" in c0}
 print("overlap with none32 at sigma 0:", res["overlap0"], flush=True)
 json.dump(res, open(out, "w"), indent=1)
