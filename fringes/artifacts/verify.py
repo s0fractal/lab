@@ -46,13 +46,32 @@ A stage runs when its inputs are in the snapshot; a checkpoint or export it need
             and Pure, seed 900): the time-locked readout, within one binomial standard error of 512 (at least 3);
             --full adds the whole transfer.py run of Soliton seed 900 with the frozen decoders (fresh, between, beyond,
             T = 24 and 48: 60 test cells, a few minutes): every accuracy of a frozen decoder within one binomial
-            standard error of 512 (at least 3), D within 1e-3 relative, the sigma cell, the edges and the calibration
-            check exactly. The oracle is refit on the 512 states of each cell, so where the dynamics at T = 48 and
-            sigma >= 0.85 lets the last bits change a few states, they move its fit: one float32 ulp of noise on the
-            weights moved it by 1.03 standard errors at sigma = 1.15 and an AMD EPYC runner by 1.54, while the frozen
-            decoders moved by at most 0.39. It gets three standard errors (at least 3 sequences)
+            standard error of 512 (at least 3), the mean sensor D within one standard error of it (its spread over
+            the cell's 1024 sequences, transfer.py --spread), the sigma cell, the edges and the calibration check
+            exactly. D was first held to 1e-3 relative, a bound no drift run had measured: one standard error of D
+            is 6.1e-4 to 5.4e-3 relative across the 60 cells, one float32 ulp of noise on the weights moved D by up
+            to 6.3e-4 relative (0.12 of its standard error, T = 48, sigma 1.2), and on an AMD EPYC runner the T = 48
+            part failed with every accuracy inside its bound, which leaves D. The oracle is refit on the 512 states
+            of each cell, so where the dynamics at T = 48 and sigma >= 0.85 lets the last bits change a few states,
+            they move its fit: one float32 ulp of noise on the weights moved it by 1.03 standard errors at
+            sigma = 1.15 and an AMD EPYC runner by 1.54, while the frozen decoders moved by at most 0.39. It gets
+            three standard errors (at least 3 sequences)
   clocklaw  clocklaw.py replays Soliton seed 900 at T = 48: the overlap r(sigma) and the norm at all 25 sigmas within
             0.01, the first zero sigma0 within 0.005 (averages of 1024 float states; another CPU moves them by ~1e-5)
+  echo      echo.py --selftest on Soliton and Pure seed 900 (the unpulsed loop is the model bit for bit, G^-1 G = I,
+            the pulses bite), then echo.py --only none48,echoJ48,echoPJ48,rewindPJ48 at sigma = 0 and 0.6 on Soliton
+            seed 900: the model's own readout within one binomial standard error of 1024 (at least 3); the LDA fit at
+            sigma = 0 within three, since it is refit on the states, like the oracle of transfer --full; the overlap r
+            and the norm within 0.01, as in clocklaw
+  decouple  decouple.py --selftest on Soliton and Pure seed 900 (the unpulsed loop is the model bit for bit, every
+            pulse train has a zero net turn, a pulse bites), then decouple.py --only 0,63 --sigmas 0.0,0.6 on Soliton
+            seed 900 at T = 128: the model's own readout within one binomial standard error of 1024 (at least 3), the
+            same-sigma LDA (refit) within three, the overlap r and the norm within 0.01 (artifacts/drift.py
+            --decouple: one float32 ulp of noise on the weights moves r by up to 0.0014 and the norm by 0.0005, ten
+            ulps the norm by 0.0055; the densest train does not move at all; the LDA moves by 0.09 standard errors)
+  pause     pause.py --selftest on Soliton and Pure seed 900, then pause.py --only none32,pause128 --sigmas 0.0,0.6 on
+            Soliton seed 900: the model's own readout within one binomial standard error of 1024 (at least 3), the
+            overlap r and the norm within 0.01, and the overlap of the paused signal with none32 within 0.01
   --bite    the check must be able to fail, on copies with the manifest updated to match each change: one flipped
             byte (manifest left alone) must fail the hashes; a frozen result moved by one sequence must fail its
             replay; poisoned numbers (NaN, +inf, -inf, the literal 1e400 that a float parser makes inf, a large finite
@@ -79,6 +98,8 @@ TMP = os.path.join(FR, "runs", "verify")
 os.makedirs(TMP, exist_ok=True)
 PR7 = os.path.join(HERE, "pr7-2026-10-28")
 READOUT = os.path.join(HERE, "readout-2026-10-28")
+ECHO = ["none24", "none32", "none48", "off24", "off48", "echoJ48", "echoP48", "echoPJ48", "rewindJ48", "rewindP48",
+        "rewindPJ48"]                                                   # the protocols of echo.py
 LDA = ["pooled", "low_pooled"] + [f"bin{k:02d}" for k in range(16)] + [f"low_bin{k:02d}" for k in range(16)] + \
     [f"cell{i:02d}" for i in range(25)]                                 # the LDAs in a frozen decoder file
 
@@ -163,6 +184,12 @@ def bite():
         return bite_transfer()
     if "decoders/soliton-s900.npz" in files:
         return bite_decoder()
+    if "results/echo/soliton-s900.json" in files:
+        return bite_echo()
+    if "results/decouple/soliton-s900.json" in files:
+        return bite_decouple()
+    if "results/pause/soliton-s900.json" in files:
+        return bite_pause()
 
     def doctored(name):
         d = os.path.join(TMP, name)
@@ -301,7 +328,8 @@ def bite_transfer():
     (T = 48, sigma 0, by 30 of 512) and a moved sensor-bin edge (Pure seed 901, by 1e-3: a decoder other than the
     frozen one) fail while their neighbours pass; an emptied overlap curve and a shortened T = 24 table fail before
     any replay. With --full the whole transfer run is replayed on the moved copy too: T = 48 must fail on the moved
-    readout, T = 24 must pass with its oracle (sigma 1.15) moved by two standard errors, inside the oracle's three."""
+    readout, T = 24 must pass with its oracle (sigma 1.15) moved by two standard errors, inside the oracle's three,
+    and the halfway sigmas must fail on D at sigma 0.525, moved by about five of its standard errors."""
     def copy(name):
         d = os.path.join(TMP, name)
         shutil.rmtree(d, ignore_errors=True)
@@ -319,6 +347,8 @@ def bite_transfer():
     # the refit oracle at T = 24, sigma 1.15 moved by two standard errors: inside its three, outside one
     poison_json(os.path.join(b, tr), lambda d: d["T24"][23].__setitem__(
         "oracle", d["T24"][23]["oracle"] + 2 * math.sqrt(d["T24"][23]["oracle"] * (1 - d["T24"][23]["oracle"]) / 512)))
+    # D at sigma 0.525 moved by 5e-3, about five of its standard errors (9.3e-4 there): the between part must fail
+    poison_json(os.path.join(b, tr), lambda d: d["between"][0].__setitem__("D", d["between"][0]["D"] + 5e-3))
     rehash(b, [cl, tr])
     poison_json(os.path.join(b, "results/transfer/pure-s901.json"),
                 lambda d: d["edges"].__setitem__(7, d["edges"][7] + 1e-3))
@@ -333,7 +363,7 @@ def bite_transfer():
                "BAD transfer soliton s900 T48 sigma 0.00", "ok  transfer soliton s900 T24 sigma 0.00",
                "BAD decoder pure s901", "ok  decoder pure s900", "ok  SHA-256"]
               + (["BAD transfer-full soliton s900 T48", "ok  transfer-full soliton s900 T24",
-                  "ok  transfer-full soliton s900 fresh"] if FULL else [])),
+                  "BAD transfer-full soliton s900 between", "ok  transfer-full soliton s900 fresh"] if FULL else [])),
              (e, "hashes,clocklaw,transfer", ["BAD clocklaw soliton s900: the frozen reference",
                                                "BAD transfer soliton s900: the frozen reference", "ok  SHA-256"])]
     failed = []
@@ -388,6 +418,149 @@ def bite_decoder():
                                             "ok  decoder soliton s900", "ok  decoder pure s900",
                                             "BAD rescore pure s901: transfer.py returned 0 rows, asked for 3 (it ref",
                                             "ok  rescore soliton s900 sigma 0.70", "ok  SHA-256"])]
+    failed = []
+    for d, only, want in plans:
+        r = subprocess.run([PY, os.path.abspath(__file__), d, "--only", only], capture_output=True, text=True)
+        lines = r.stdout.strip().splitlines()
+        missing = [w for w in want if not any(ln.startswith(w) for ln in lines)]
+        ok = r.returncode != 0 and not missing
+        for ln in lines:
+            if want and ln.startswith("BAD"):
+                print(f"      {ln}")
+        if missing:
+            print(f"      missing: {missing}")
+        print(f"{'ok ' if ok else 'BAD'} bite {os.path.basename(d)}: {lines[-1] if lines else r.stderr[-300:]}")
+        if not ok:
+            failed.append(d)
+        shutil.rmtree(d)
+    sys.exit(1 if failed else 0)
+
+
+def bite_echo():
+    """A flipped byte fails the hashes. A copy with the manifest updated has the overlap of the Loschmidt echo
+    (echoPJ48, sigma 0.6) moved by 0.05 and the rewound readout (rewindPJ48, sigma 0) by 30 of 1024: those must fail
+    while none48 passes; a copy without the echoJ48 protocol must fail before any replay."""
+    def copy(name):
+        d = os.path.join(TMP, name)
+        shutil.rmtree(d, ignore_errors=True)
+        shutil.copytree(SNAP, d)
+        return d
+    ref = "results/echo/soliton-s900.json"
+    a = copy("bite-byte")
+    f = os.path.join(a, "results/echo/pure-s900.json")
+    raw = bytearray(open(f, "rb").read())
+    raw[len(raw) // 2] ^= 1
+    open(f, "wb").write(raw)
+    b = copy("bite-moved")
+
+    def move(d):
+        d["echoPJ48"]["r"][12] -= 0.05
+        d["rewindPJ48"]["own"][0] -= 30 / 1024
+    poison_json(os.path.join(b, ref), move)
+    rehash(b, [ref])
+    e = copy("bite-empty-ref")
+    poison_json(os.path.join(e, ref), lambda d: d.pop("echoJ48"))
+    rehash(e, [ref])
+    plans = [(a, "hashes", []),
+             (b, "hashes,echo", ["BAD echo soliton s900 echoPJ48 sigma 0.60", "BAD echo soliton s900 rewindPJ48 sigma 0.00",
+                                 "ok  echo soliton s900 none48 sigma 0.60", "ok  echo soliton s900 echoPJ48 sigma 0.00",
+                                 "ok  SHA-256"]),
+             (e, "hashes,echo", ["BAD echo soliton s900: the frozen reference", "ok  SHA-256"])]
+    failed = []
+    for d, only, want in plans:
+        r = subprocess.run([PY, os.path.abspath(__file__), d, "--only", only], capture_output=True, text=True)
+        lines = r.stdout.strip().splitlines()
+        missing = [w for w in want if not any(ln.startswith(w) for ln in lines)]
+        ok = r.returncode != 0 and not missing
+        for ln in lines:
+            if want and ln.startswith("BAD"):
+                print(f"      {ln}")
+        if missing:
+            print(f"      missing: {missing}")
+        print(f"{'ok ' if ok else 'BAD'} bite {os.path.basename(d)}: {lines[-1] if lines else r.stderr[-300:]}")
+        if not ok:
+            failed.append(d)
+        shutil.rmtree(d)
+    sys.exit(1 if failed else 0)
+
+
+def bite_decouple():
+    """A flipped byte fails the hashes. A copy with the manifest updated has the frozen memory of the densest train
+    (n = 63, sigma 0, same-sigma LDA) lowered by 60 of 1024 and its overlap at sigma 0.6 by 0.1: those must fail while
+    n = 0 passes; a copy without the n = 21 train must fail before any replay."""
+    def copy(name):
+        d = os.path.join(TMP, name)
+        shutil.rmtree(d, ignore_errors=True)
+        shutil.copytree(SNAP, d)
+        return d
+    ref = "results/decouple/soliton-s900.json"
+    a = copy("bite-byte")
+    f = os.path.join(a, "results/decouple/pure-s900.json")
+    raw = bytearray(open(f, "rb").read())
+    raw[len(raw) // 2] ^= 1
+    open(f, "wb").write(raw)
+    b = copy("bite-moved")
+
+    def move(d):
+        d["dd63"]["aware"][0] -= 60 / 1024
+        d["dd63"]["r"][6] -= 0.1
+    poison_json(os.path.join(b, ref), move)
+    rehash(b, [ref])
+    e = copy("bite-empty-ref")
+    poison_json(os.path.join(e, ref), lambda d: d.pop("dd21"))
+    rehash(e, [ref])
+    plans = [(a, "hashes", []),
+             (b, "hashes,decouple", ["BAD decouple soliton s900 n = 63 sigma 0.00",
+                                     "BAD decouple soliton s900 n = 63 sigma 0.60",
+                                     "ok  decouple soliton s900 n = 0 sigma 0.00", "ok  SHA-256"]),
+             (e, "hashes,decouple", ["BAD decouple soliton s900: the frozen reference", "ok  SHA-256"])]
+    failed = []
+    for d, only, want in plans:
+        r = subprocess.run([PY, os.path.abspath(__file__), d, "--only", only], capture_output=True, text=True)
+        lines = r.stdout.strip().splitlines()
+        missing = [w for w in want if not any(ln.startswith(w) for ln in lines)]
+        ok = r.returncode != 0 and not missing
+        for ln in lines:
+            if want and ln.startswith("BAD"):
+                print(f"      {ln}")
+        if missing:
+            print(f"      missing: {missing}")
+        print(f"{'ok ' if ok else 'BAD'} bite {os.path.basename(d)}: {lines[-1] if lines else r.stderr[-300:]}")
+        if not ok:
+            failed.append(d)
+        shutil.rmtree(d)
+    sys.exit(1 if failed else 0)
+
+
+def bite_pause():
+    """A flipped byte fails the hashes. A copy with the manifest updated has the paused readout at sigma 0 raised by 60
+    of 1024 and the paused overlap with none32 moved by 0.05: both must fail while none32 passes; a copy without the
+    pause128 protocol must fail before any replay."""
+    def copy(name):
+        d = os.path.join(TMP, name)
+        shutil.rmtree(d, ignore_errors=True)
+        shutil.copytree(SNAP, d)
+        return d
+    ref = "results/pause/soliton-s900.json"
+    a = copy("bite-byte")
+    f = os.path.join(a, "results/pause/pure-s900.json")
+    raw = bytearray(open(f, "rb").read())
+    raw[len(raw) // 2] ^= 1
+    open(f, "wb").write(raw)
+    b = copy("bite-moved")
+
+    def move(d):
+        d["pause128"]["own"][0] += 60 / 1024
+        d["overlap0"]["pause128_none32"] += 0.05
+    poison_json(os.path.join(b, ref), move)
+    rehash(b, [ref])
+    e = copy("bite-empty-ref")
+    poison_json(os.path.join(e, ref), lambda d: d.pop("pause128"))
+    rehash(e, [ref])
+    plans = [(a, "hashes", []),
+             (b, "hashes,pause", ["BAD pause soliton s900 pause128 sigma 0.00", "BAD pause soliton s900: overlap",
+                                  "ok  pause soliton s900 none32 sigma 0.00", "ok  SHA-256"]),
+             (e, "hashes,pause", ["BAD pause soliton s900: the frozen reference", "ok  SHA-256"])]
     failed = []
     for d, only, want in plans:
         r = subprocess.run([PY, os.path.abspath(__file__), d, "--only", only], capture_output=True, text=True)
@@ -705,7 +878,7 @@ if (FULL or (ONLY and "transfer-full" in ONLY)) and "results/transfer/soliton-s9
     else:
         print(f"--  full transfer replay on {cpu_name()}", flush=True)
         out = os.path.join(TMP, "transfer-full-soliton-s900.json")
-        r = run("transfer.py", LAB, find("checkpoints", "soliton-T032-s900-step04000.pt"), out, "2")
+        r = run("transfer.py", LAB, find("checkpoints", "soliton-T032-s900-step04000.pt"), out, "2", "--spread")
         new = json.load(open(out)) if r.returncode == 0 else {}
         check(new.get("edges") == frozen["edges"] and new.get("calibration_check") == frozen["calibration_check"],
               "transfer-full soliton s900: the frozen decoder (edges and calibration check equal)")
@@ -714,12 +887,13 @@ if (FULL or (ONLY and "transfer-full" in ONLY)) and "results/transfer/soliton-s9
             if [r_.get("sigma") for r_ in got] != v:
                 check(False, f"transfer-full soliton s900 {p_}: {len(got)} rows replayed, {len(v)} asked for")
                 continue
-            gaps, worst_ = [], {"frozen": (0.0, ""), "oracle": (0.0, "")}
+            gaps, worst_ = [], {"frozen": (0.0, ""), "oracle": (0.0, ""), "D": (0.0, "")}
             for row, w in zip(got, frozen[p_]):
                 ks = [k for k in w if k not in ("sigma", "sigma_cell", "D")]
                 if not all(k in row and finite(row[k], w[k]) for k in ks + ["D"]) or \
-                        row["sigma_cell"] != w["sigma_cell"]:
+                        row["sigma_cell"] != w["sigma_cell"] or not 0 < row.get("D_se", 0) < math.inf:
                     gaps.append(math.inf)
+                    worst_["frozen"] = (math.inf, f"a missing, nonfinite or other-cell row at sigma {w['sigma']}")
                     continue
                 for k in ks:                                               # the refit oracle: see the docstring
                     se = math.sqrt(w[k] * (1 - w[k]) * 512) * (3 if k == "oracle" else 1)
@@ -727,11 +901,14 @@ if (FULL or (ONLY and "transfer-full" in ONLY)) and "results/transfer/soliton-s9
                     gaps.append(g)
                     side = "oracle" if k == "oracle" else "frozen"
                     worst_[side] = max(worst_[side], (g, f"{k} at sigma {w['sigma']}"))
-                gaps.append(abs(row["D"] - w["D"]) / max(abs(w["D"]), 1e-12) / 1e-3)
-            exact = new.get(p_) == frozen[p_]
+                g = abs(row["D"] - w["D"]) / row["D_se"]                    # in one standard error of D's mean
+                gaps.append(g)
+                worst_["D"] = max(worst_["D"], (g, f"D at sigma {w['sigma']}"))
+            exact = [{k: x for k, x in r_.items() if k != "D_se"} for r_ in got] == frozen[p_]
             check(max(gaps) <= 1, f"transfer-full soliton s900 {p_}: {len(v)} cells, " + ("exact" if exact else
                   f"frozen decoders: tightest {worst_['frozen'][1]} at {worst_['frozen'][0]:.2f} of one SE; oracle: "
-                  f"{worst_['oracle'][1]} at {worst_['oracle'][0]:.2f} of three"))
+                  f"{worst_['oracle'][1]} at {worst_['oracle'][0]:.2f} of three; {worst_['D'][1]} at "
+                  f"{worst_['D'][0]:.2f} of one SE"))
 
 # clock-law replay: the readout-free overlap at T = 48
 if stage("clocklaw") and "results/clocklaw/soliton-s900.json" in by_path:
@@ -753,6 +930,115 @@ if stage("clocklaw") and "results/clocklaw/soliton-s900.json" in by_path:
                 check(ok, f"clocklaw soliton s900 T48 sigma {s_:.2f}: r {vals[0]:+.3f} (frozen {vals[1]:+.3f})")
             z0, z1 = new.get("sigma0"), f48.get("sigma0")
             check(finite(z0, z1) and abs(z0 - z1) <= 0.005, f"clocklaw soliton s900 T48: first zero {z0} (frozen {z1})")
+
+# the spin echo: the selftests and four protocols at sigma 0 and 0.6
+if stage("echo") and "results/echo/soliton-s900.json" in by_path:
+    for kind in ("soliton", "pure"):
+        r = run("-I", "echo.py", LAB, find("checkpoints", f"{kind}-T032-s900-step04000.pt"), os.devnull, "2", "--selftest")
+        check(r.returncode == 0, f"echo {kind} s900 selftest: the unpulsed loop is the model bit for bit, G^-1 G = I, "
+              "the pulses bite")
+    frozen = json.load(open(os.path.join(SNAP, "results/echo/soliton-s900.json")))
+    names = ["none48", "echoJ48", "echoPJ48", "rewindPJ48"]
+    whole = all(isinstance(frozen.get(p_), dict) and all(len(frozen[p_].get(k, [])) == 25
+                                                         for k in ("own", "lda0", "r", "norm")) for p_ in ECHO)
+    if [round(v, 2) if is_num(v) else v for v in frozen.get("sigma", [])] != GRID["readout"] or not whole:
+        check(False, "echo soliton s900: the frozen reference lacks a protocol or the 25-point grid")
+    else:
+        print(f"--  echo replay on {cpu_name()}", flush=True)
+        out = os.path.join(TMP, "echo-soliton-s900.json")
+        r = run("-I", "echo.py", LAB, find("checkpoints", "soliton-T032-s900-step04000.pt"), out, "2",
+                "--only", ",".join(names), "--sigmas", "0.0,0.6")
+        new = json.load(open(out)) if r.returncode == 0 else {}
+        if new.get("sigma") != [0.0, 0.6] or any(nm not in new for nm in names):
+            check(False, "echo soliton s900: the replay did not return the four protocols at sigma 0 and 0.6")
+        else:
+            for nm in names:
+                for i, s_ in enumerate((0.0, 0.6)):
+                    a, w, j = new[nm], frozen[nm], GRID["readout"].index(s_)
+                    keys = ("own", "lda0", "r", "norm")
+                    if not all(finite(a[k][i], w[k][j]) for k in keys):
+                        check(False, f"echo soliton s900 {nm} sigma {s_:.2f}: nonfinite value")
+                        continue
+                    acc = {k: abs(a[k][i] - w[k][j]) * 1024 / max(3.0, math.sqrt(w[k][j] * (1 - w[k][j]) * 1024)
+                                                                   * (3 if k == "lda0" else 1)) for k in ("own", "lda0")}
+                    ok = max(acc.values()) <= 1 and abs(a["r"][i] - w["r"][j]) <= 0.01 and \
+                        abs(a["norm"][i] - w["norm"][j]) <= 0.01
+                    check(ok, f"echo soliton s900 {nm} sigma {s_:.2f}: own readout {a['own'][i]:.3f} (frozen "
+                          f"{w['own'][j]:.3f}), r {a['r'][i]:+.3f} (frozen {w['r'][j]:+.3f}), sigma-0 LDA "
+                          f"{a['lda0'][i]:.3f} (frozen {w['lda0'][j]:.3f})")
+
+# dynamical decoupling: the selftests and the unpulsed and densest trains at sigma 0 and 0.6
+if stage("decouple") and "results/decouple/soliton-s900.json" in by_path:
+    for kind in ("soliton", "pure"):
+        r = run("-I", "decouple.py", LAB, find("checkpoints", f"{kind}-T032-s900-step04000.pt"), os.devnull, "2",
+                "--selftest")
+        check(r.returncode == 0, f"decouple {kind} s900 selftest: the unpulsed loop is the model bit for bit, every "
+              "train has a zero net turn, a pulse bites")
+    frozen = json.load(open(os.path.join(SNAP, "results/decouple/soliton-s900.json")))
+    grid = [round(0.1 * i, 1) for i in range(13)]
+    whole = all(isinstance(frozen.get(f"dd{n}"), dict) and all(len(frozen[f"dd{n}"].get(k, [])) == 13
+                                                               for k in ("own", "aware", "pooled", "r", "norm"))
+                for n in (0, 1, 3, 7, 21, 63))
+    if [round(v, 1) if is_num(v) else v for v in frozen.get("sigma", [])] != grid or not whole:
+        check(False, "decouple soliton s900: the frozen reference lacks a pulse train or the 13-point grid")
+    else:
+        print(f"--  decouple replay on {cpu_name()}", flush=True)
+        out = os.path.join(TMP, "decouple-soliton-s900.json")
+        r = run("-I", "decouple.py", LAB, find("checkpoints", "soliton-T032-s900-step04000.pt"), out, "2",
+                "--only", "0,63", "--sigmas", "0.0,0.6")
+        new = json.load(open(out)) if r.returncode == 0 else {}
+        if new.get("sigma") != [0.0, 0.6] or any(f"dd{n}" not in new for n in (0, 63)):
+            check(False, "decouple soliton s900: the replay did not return n = 0 and 63 at sigma 0 and 0.6")
+        else:
+            for n in (0, 63):
+                for i, s_ in enumerate((0.0, 0.6)):
+                    a, w, j = new[f"dd{n}"], frozen[f"dd{n}"], grid.index(s_)
+                    keys = ("own", "aware", "r", "norm")
+                    if not all(finite(a[k][i], w[k][j]) for k in keys):
+                        check(False, f"decouple soliton s900 n = {n} sigma {s_:.2f}: nonfinite value")
+                        continue
+                    acc = {k: abs(a[k][i] - w[k][j]) * 1024 / max(3.0, math.sqrt(w[k][j] * (1 - w[k][j]) * 1024)
+                                                                   * (3 if k == "aware" else 1)) for k in ("own", "aware")}
+                    ok = max(acc.values()) <= 1 and abs(a["r"][i] - w["r"][j]) <= 0.01 and \
+                        abs(a["norm"][i] - w["norm"][j]) <= 0.01
+                    check(ok, f"decouple soliton s900 n = {n} sigma {s_:.2f}: same-sigma LDA {a['aware'][i]:.3f} "
+                          f"(frozen {w['aware'][j]:.3f}), r {a['r'][i]:+.3f} (frozen {w['r'][j]:+.3f}), own readout "
+                          f"{a['own'][i]:.3f} (frozen {w['own'][j]:.3f})")
+
+# the pause button: the selftests, then none32 and pause128 at sigma 0 and 0.6
+if stage("pause") and "results/pause/soliton-s900.json" in by_path:
+    for kind in ("soliton", "pure"):
+        r = run("-I", "pause.py", LAB, find("checkpoints", f"{kind}-T032-s900-step04000.pt"), os.devnull, "2", "--selftest")
+        check(r.returncode == 0, f"pause {kind} s900 selftest: the unpulsed loop is the model bit for bit, the pause has "
+              "48 pulses, a zero net turn and ends as trained, a pulse bites")
+    frozen = json.load(open(os.path.join(SNAP, "results/pause/soliton-s900.json")))
+    grid = [round(0.1 * i, 1) for i in range(13)]
+    whole = all(isinstance(frozen.get(p_), dict) and all(len(frozen[p_].get(k, [])) == 13 for k in ("own", "r", "norm"))
+                for p_ in ("none32", "none128", "pause128")) and finite(frozen.get("overlap0", {}).get("pause128_none32"))
+    if [round(v, 1) if is_num(v) else v for v in frozen.get("sigma", [])] != grid or not whole:
+        check(False, "pause soliton s900: the frozen reference lacks a protocol, the overlap or the 13-point grid")
+    else:
+        print(f"--  pause replay on {cpu_name()}", flush=True)
+        out = os.path.join(TMP, "pause-soliton-s900.json")
+        r = run("-I", "pause.py", LAB, find("checkpoints", "soliton-T032-s900-step04000.pt"), out, "2",
+                "--only", "none32,pause128", "--sigmas", "0.0,0.6")
+        new = json.load(open(out)) if r.returncode == 0 else {}
+        if new.get("sigma") != [0.0, 0.6] or any(p_ not in new for p_ in ("none32", "pause128")):
+            check(False, "pause soliton s900: the replay did not return none32 and pause128 at sigma 0 and 0.6")
+        else:
+            for p_ in ("none32", "pause128"):
+                for i, s_ in enumerate((0.0, 0.6)):
+                    a, w, j = new[p_], frozen[p_], grid.index(s_)
+                    if not all(finite(a[k][i], w[k][j]) for k in ("own", "r", "norm")):
+                        check(False, f"pause soliton s900 {p_} sigma {s_:.2f}: nonfinite value")
+                        continue
+                    gap = abs(a["own"][i] - w["own"][j]) * 1024 / max(3.0, math.sqrt(w["own"][j] * (1 - w["own"][j]) * 1024))
+                    ok = gap <= 1 and abs(a["r"][i] - w["r"][j]) <= 0.01 and abs(a["norm"][i] - w["norm"][j]) <= 0.01
+                    check(ok, f"pause soliton s900 {p_} sigma {s_:.2f}: own readout {a['own'][i]:.3f} (frozen "
+                          f"{w['own'][j]:.3f}), r {a['r'][i]:+.3f} (frozen {w['r'][j]:+.3f})")
+            o_new, o_old = new.get("overlap0", {}).get("pause128_none32"), frozen["overlap0"]["pause128_none32"]
+            check(finite(o_new, o_old) and abs(o_new - o_old) <= 0.01,
+                  f"pause soliton s900: overlap of the paused signal with none32 {o_new} (frozen {o_old})")
 
 print(f"verify {man['snapshot']}: {'FAILED: ' + '; '.join(bad) if bad else 'ok'}")
 sys.exit(1 if bad else 0)

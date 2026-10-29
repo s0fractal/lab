@@ -1,0 +1,73 @@
+{
+ "snapshot": "echo-2026-10-29",
+ "what": "post hoc fringes runs behind fringes/README.md; not part of the phs-soliton PREREG v1 verdict",
+ "source_commit": "5746984d4ec9567f0af188e15cdf5a8025926bd6",
+ "source_note": "the code at this commit; earlier files were made by earlier versions of the same scripts (see status for the two corrected measurements)",
+ "environment": {
+  "python": "3.13.17",
+  "torch": "2.14.1+cu130",
+  "numpy": "2.5.3",
+  "platform": "Linux-6.18.44-fc-v185-x86_64-with-glibc2.39",
+  "cpu": "Intel(R) Xeon(R) Processor @ 2.80GHz"
+ },
+ "commands_run_from": "fringes/, with LAB = the lab checkout and the phs-soliton venv (uv sync --frozen)",
+ "cfgs": {},
+ "files": [
+  {
+   "path": "results/echo/pure-s900.json",
+   "role": "a spin echo for the clock memory (README: spin echo)",
+   "made_by": "echo.py LAB artifacts/pr7-2026-10-28/checkpoints/pure-T032-s900-step04000.pt runs/echo/pure-s900.json 1",
+   "from": "runs/echo/pure-s900.json",
+   "bytes": 28490,
+   "sha256": "c79c60cd3347a958f0d421e10865153bb75ebe3b6ddc09429049e51fb9b238f8"
+  },
+  {
+   "path": "results/echo/pure-s901.json",
+   "role": "a spin echo for the clock memory (README: spin echo)",
+   "made_by": "echo.py LAB artifacts/pr7-2026-10-28/checkpoints/pure-T032-s901-step04000.pt runs/echo/pure-s901.json 1",
+   "from": "runs/echo/pure-s901.json",
+   "bytes": 28371,
+   "sha256": "6e3e6865c9e9105c1afbe96daabb7beb1102785593b378a12018d754e6587cd3"
+  },
+  {
+   "path": "results/echo/pure-s902.json",
+   "role": "a spin echo for the clock memory (README: spin echo)",
+   "made_by": "echo.py LAB artifacts/pr7-2026-10-28/checkpoints/pure-T032-s902-step04000.pt runs/echo/pure-s902.json 1",
+   "from": "runs/echo/pure-s902.json",
+   "bytes": 28404,
+   "sha256": "9da4e828c4a1a7b5b475e5eec7de3784a1a8df8739fe4861bf465cbcd927fbba"
+  },
+  {
+   "path": "results/echo/soliton-s900.json",
+   "role": "a spin echo for the clock memory (README: spin echo)",
+   "made_by": "echo.py LAB artifacts/pr7-2026-10-28/checkpoints/soliton-T032-s900-step04000.pt runs/echo/soliton-s900.json 1",
+   "from": "runs/echo/soliton-s900.json",
+   "bytes": 28672,
+   "sha256": "52bdecba7e39f117663cd7eb753fb652d5af047656b0f64cb9e03b539a5fd9f6"
+  },
+  {
+   "path": "results/echo/soliton-s901.json",
+   "role": "a spin echo for the clock memory (README: spin echo)",
+   "made_by": "echo.py LAB artifacts/pr7-2026-10-28/checkpoints/soliton-T032-s901-step04000.pt runs/echo/soliton-s901.json 1",
+   "from": "runs/echo/soliton-s901.json",
+   "bytes": 28601,
+   "sha256": "05ca75d0eb081a681e45769736ea11df8b2fcb4b5114f7cc9dd0f3da00bd2c57"
+  },
+  {
+   "path": "results/echo/soliton-s902.json",
+   "role": "a spin echo for the clock memory (README: spin echo)",
+   "made_by": "echo.py LAB artifacts/pr7-2026-10-28/checkpoints/soliton-T032-s902-step04000.pt runs/echo/soliton-s902.json 1",
+   "from": "runs/echo/soliton-s902.json",
+   "bytes": 28739,
+   "sha256": "8cb4672b0c93b7f381fa751009533f169b0c49d13732ac4ac6a36acfd261dfb1"
+  },
+  {
+   "path": "results/echo_path/soliton-s900.json",
+   "role": "the clock hand token by token (README: spin echo; a picture, not a test)",
+   "made_by": "echo_path.py LAB artifacts/pr7-2026-10-28/checkpoints/soliton-T032-s900-step04000.pt runs/echo_path/soliton-s900.json 1",
+   "from": "runs/echo_path/soliton-s900.json",
+   "bytes": 29550,
+   "sha256": "426e81354944db496507fa65813ea12cdd7f29cefe19754673a27e306305c9cb"
+  }
+ ]
+}

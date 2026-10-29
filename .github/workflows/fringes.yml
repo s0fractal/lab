@@ -43,3 +43,15 @@ jobs:
         run: phs-soliton/.venv/bin/python fringes/artifacts/verify.py fringes/artifacts/transfer-2026-10-29b --full
       - name: the transfer check must be able to fail
         run: phs-soliton/.venv/bin/python fringes/artifacts/verify.py fringes/artifacts/transfer-2026-10-29b --bite --full
+      - name: spin echo, replayed from the frozen checkpoints
+        run: phs-soliton/.venv/bin/python fringes/artifacts/verify.py fringes/artifacts/echo-2026-10-29
+      - name: the echo check must be able to fail
+        run: phs-soliton/.venv/bin/python fringes/artifacts/verify.py fringes/artifacts/echo-2026-10-29 --bite
+      - name: dynamical decoupling, replayed from the frozen checkpoints
+        run: phs-soliton/.venv/bin/python fringes/artifacts/verify.py fringes/artifacts/decouple-2026-10-29
+      - name: the decoupling check must be able to fail
+        run: phs-soliton/.venv/bin/python fringes/artifacts/verify.py fringes/artifacts/decouple-2026-10-29 --bite
+      - name: the pause button, replayed from the frozen checkpoints
+        run: phs-soliton/.venv/bin/python fringes/artifacts/verify.py fringes/artifacts/pause-2026-10-29
+      - name: the pause check must be able to fail
+        run: phs-soliton/.venv/bin/python fringes/artifacts/verify.py fringes/artifacts/pause-2026-10-29 --bite
