@@ -10,13 +10,16 @@ another CPU rounds differently), then cells are recomputed with the producer's o
                the same-sigma LDA (refit) in standard errors of 1024 (at least 3), and of the overlap r and the
                relative norm, from artifacts/decouple-2026-10-29
   --kinds      kinds.py's J21, J63 and P63 at sigma 0, 0.6, the same numbers, from artifacts/kinds-2026-10-29
-Usage: artifacts/drift.py LAB EPS [--decouple | --kinds]   (from fringes/, with the phs-soliton venv's python -I)"""
+With --kinds, --seed S draws another noise on the weights (default 1), and every line ends with the raw numbers, so
+several seeds give the spread of a redrawn cell.
+Usage: artifacts/drift.py LAB EPS [--decouple | --kinds [--seed S]]   (from fringes/, with the phs-soliton venv's python -I)"""
 import json
 import sys
 
 import torch
 
 LAB, eps = sys.argv[1], float(sys.argv[2])
+SEED = sys.argv[sys.argv.index("--seed") + 1] if "--seed" in sys.argv else "1"   # which noise on the weights
 if "--decouple" in sys.argv:
     sys.argv = ["decouple.py", LAB, f"{LAB}/fringes/artifacts/pr7-2026-10-28/checkpoints/soliton-T032-s900-step04000.pt",
                 "/dev/null", "1"]
@@ -51,7 +54,7 @@ if "--kinds" in sys.argv:
     src = open(f"{LAB}/fringes/kinds.py").read().split('if "--scales" in sys.argv:')[0]
     exec(compile(src, "kinds.py", "exec"), ns)
     frozen = json.load(open(f"{LAB}/fringes/artifacts/kinds-2026-10-29/results/kinds/soliton-s900.json"))
-    g = torch.Generator().manual_seed(1)
+    g = torch.Generator().manual_seed(int(SEED))
     with torch.no_grad():
         for p in ns["model"].parameters():
             p.mul_(1 + eps * torch.randn(p.shape, generator=g, dtype=p.dtype))
@@ -69,7 +72,8 @@ if "--kinds" in sys.argv:
             se = {k: abs(got[k] - w[k][j]) * 1024 / max(3.0, (w[k][j] * (1 - w[k][j]) * 1024) ** 0.5)
                   for k in ("own", "aware")}
             print(f"eps {eps:.0e} {name} sigma {s:.1f}: own {se['own']:.2f} SE, aware LDA {se['aware']:.2f} SE, "
-                  f"r {abs(got['r'] - w['r'][j]):.4f}, norm {abs(got['norm'] - w['norm'][j]):.4f}", flush=True)
+                  f"r {abs(got['r'] - w['r'][j]):.4f}, norm {abs(got['norm'] - w['norm'][j]):.4f}; raw " +
+                  json.dumps({"seed": int(SEED), **got}), flush=True)
     sys.exit(0)
 sys.argv = ["transfer.py", LAB, f"{LAB}/fringes/artifacts/pr7-2026-10-28/checkpoints/soliton-T032-s900-step04000.pt",
             "/dev/null", "1"]
