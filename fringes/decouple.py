@@ -12,7 +12,9 @@ r(t) for sigma 0.3, 0.6, 0.9; at sigma = 0 the overlap of c(t) with c(3), the si
 clock still turn?) and |c(t)|. Decoders on the final state, fit on a calibration set of the same n (namespace
 "decouple-cal", 1024 per sigma): the LDA of the same sigma (knows sigma: what a linear reader can get) and one pooled
 LDA over all sigmas (blind to sigma); both scored on the test cells; plus the model's own readout.
-Usage: decouple.py LAB CKPT OUT [threads] [--selftest]
+Usage: decouple.py LAB CKPT OUT [threads] [--selftest | --only N,... --sigmas S,...]
+--only and --sigmas run a subset (sigma 0 first), which is what artifacts/verify.py replays; the pooled LDA, being fit
+over the whole sigma grid, is left out there (null), every other number is the same cell as in the full run.
 --selftest: with no pulse the loop gives the model's own logits bit for bit (sigma 0 and 0.6); every train has n pulses
 and a zero net turn; one pulse changes the logits (the bite)."""
 import dataclasses
@@ -138,6 +140,11 @@ if "--selftest" in sys.argv:
     ok &= moved > 1e-4
     sys.exit(0 if ok else 1)
 
+SUBSET = "--only" in sys.argv
+if SUBSET:
+    NS = tuple(int(v) for v in sys.argv[sys.argv.index("--only") + 1].split(","))
+    GRID = [float(v) for v in sys.argv[sys.argv.index("--sigmas") + 1].split(",")]
+    assert GRID[0] == 0.0, "r is measured against sigma = 0, so the sigma list starts there"
 res = {"ckpt": ckpt, "kind": c["kind"], "seed": c["seed"], "T": T, "n_test": 1024, "n_cal": 1024, "sigma": GRID,
        "trace_sigma": list(TRACE)}
 for n in NS:
@@ -153,7 +160,7 @@ for n in NS:
         sig = class_signal(z, y)
         row["own"].append(float((pred == y).mean()))
         row["aware"].append(float((lda_predict(aware[s], z) == y).mean()))
-        row["pooled"].append(float((lda_predict(pooled, z) == y).mean()))
+        row["pooled"].append(None if SUBSET else float((lda_predict(pooled, z) == y).mean()))
         row["r"].append(cos(sig, ref[-1]))
         row["norm"].append(float(np.linalg.norm(sig) / np.linalg.norm(ref[-1])))
         row["abs"].append(float(np.linalg.norm(sig)))
@@ -164,6 +171,5 @@ for n in NS:
     row["abs0_t"] = [round(float(np.linalg.norm(v)), 4) for v in ref]
     res[f"dd{n}"] = row
     print(f"dd{n} sigma0 {row['sigma0']} anchor(127) {row['anchor0'][-1]:+.2f} " + " ".join(
-        f"{s:.1f}:{a:+.2f}/{b:.2f}/{p:.2f}" for s, a, b, p in zip(GRID[::3], row["r"][::3], row["aware"][::3],
-                                                              row["pooled"][::3])), flush=True)
+        f"{s:.1f}:{a:+.2f}/{b:.2f}" for s, a, b in zip(GRID[::3], row["r"][::3], row["aware"][::3])), flush=True)
 json.dump(res, open(out, "w"), indent=1)
