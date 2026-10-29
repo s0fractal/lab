@@ -32,7 +32,9 @@ A stage runs when its inputs are in the snapshot; a checkpoint or export it need
   --bite    the check must be able to fail, on copies with the manifest updated to match each change: one flipped
             byte (manifest left alone) must fail the hashes; a frozen result moved by one sequence must fail its
             replay; poisoned numbers (NaN, +inf, -inf, the literal 1e400 that a float parser makes inf, a large finite
-            value) in exports and results must each fail while the untouched ones pass
+            value) in exports and results must each fail while the untouched ones pass; a frozen reference emptied
+            of its rows, or missing its last row, must fail (every replay checks the whole grid of its reference
+            first, then that the replay returned exactly the sigmas it asked for)
 Scratch output goes to fringes/runs/verify (ignored)."""
 import hashlib
 import json
@@ -63,6 +65,9 @@ for k in ("soliton", "pure"):
         SRC[f"{k}-{s}"] = (f"{k}-T032-{s}-step04000.pt",)
 # rounding replays: (model, bits, mode) -> frozen result; the export is the seed-900 one of pr7
 ROUND = [("soliton", 7, "stochastic"), ("pure", 6, "nearest")]
+# the sigma grids the producers write; a frozen reference must hold the whole grid, a replay exactly what was asked
+GRID = {"probe": [round(0.05 * i, 2) for i in range(41)], "rounding": [round(0.1 * i, 1) for i in range(13)],
+        "readout": [round(0.05 * i, 2) for i in range(25)]}
 ROUND_FULL = [("soliton", 7, "feedback"), ("pure", 6, "stochastic")]
 
 
@@ -77,6 +82,27 @@ def find(*parts):
 
 def is_num(v):
     return isinstance(v, (int, float)) and not isinstance(v, bool)
+
+
+def sigmas(rows):
+    return [round(r["sigma"], 2) if is_num(r.get("sigma")) else None for r in rows]
+
+
+def cpu_name():
+    """For the log only: never let a diagnostic block a check (there is no /proc on macOS)."""
+    try:
+        with open("/proc/cpuinfo") as f:
+            return next((ln.split(":", 1)[1].strip() for ln in f if ln.startswith("model name")), "?")
+    except OSError:
+        pass
+    try:
+        r = subprocess.run(["sysctl", "-n", "machdep.cpu.brand_string"], capture_output=True, text=True, timeout=5)
+        if r.returncode == 0 and r.stdout.strip():
+            return r.stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        pass
+    import platform
+    return platform.processor() or platform.machine() or "?"
 
 
 def finite(*vals):
@@ -159,6 +185,15 @@ def bite():
     want = [f"BAD export {n} " for n in poison] + [f"ok  export {n} " for n in controls] + want_rows + ["ok  SHA-256"]
     plans.append((c, only, want, list(poison)))
 
+    # a reference with no rows, and one missing its last row (Codex review of #8: zip compared nothing and passed)
+    ref, stage_ = (("results/rounding/soliton-A7-B7-stochastic.json", "rounding") if rounding
+                   else ("results/probe2-soliton-4000.json", "float"))
+    for name, cut in (("bite-empty-ref", lambda rows: []), ("bite-short-ref", lambda rows: rows[:-1])):
+        e = doctored(name)
+        poison_json(os.path.join(e, ref), lambda d, cut=cut: d.__setitem__("rows", cut(d["rows"])))
+        rehash(e, [ref])
+        plans.append((e, f"hashes,{stage_}", ["ok  SHA-256", "BAD "], []))
+
     failed = []
     for d, only, want, _ in plans:
         r = subprocess.run([PY, os.path.abspath(__file__), d, "--only", only], capture_output=True, text=True)
@@ -203,6 +238,15 @@ def bite_readout(files):
     plans = [(a, "hashes", []), (c, "hashes,readout", ["BAD readout soliton s900 sigma 0.70",
                                                          "BAD readout soliton s900 sigma 0.80",
                                                          "ok  readout soliton s900 sigma 0.00", "ok  SHA-256"])]
+    # a reference with no rows, and one missing its last row (Codex review of #8: zip compared nothing and passed);
+    # both are refused before the replay
+    for name, cut in (("bite-empty-ref", lambda rows: []), ("bite-short-ref", lambda rows: rows[:-1])):
+        e = os.path.join(TMP, name)
+        shutil.rmtree(e, ignore_errors=True)
+        shutil.copytree(SNAP, e)
+        poison_json(os.path.join(e, target), lambda d, cut=cut: d.__setitem__("rows", cut(d["rows"])))
+        rehash(e, [target])
+        plans.append((e, "hashes,readout", ["ok  SHA-256", "BAD readout soliton s900: the frozen reference"]))
     failed = []
     for d, only, want in plans:
         r = subprocess.run([PY, os.path.abspath(__file__), d, "--only", only], capture_output=True, text=True)
@@ -276,7 +320,8 @@ if stage("hashes"):
           f"extra {sorted(on_disk - set(by_path))[:3]}, missing {sorted(set(by_path) - on_disk)[:3]}")
     wrong = [p for p, f in by_path.items() if p in on_disk and (os.path.getsize(os.path.join(SNAP, p)) != f["bytes"] or
              hashlib.sha256(open(os.path.join(SNAP, p), "rb").read()).hexdigest() != f["sha256"])]
-    check(not wrong, f"SHA-256 and size of {len(by_path)} files" + (f", wrong: {wrong[:3]}" if wrong else ""))
+    check(bool(by_path) and not wrong, f"SHA-256 and size of {len(by_path)} files"
+          + (f", wrong: {wrong[:3]}" if wrong else "") + ("" if by_path else ": the manifest lists no files"))
 
 # checkpoints
 if stage("ckpts") and any(p.endswith(".pt") for p in by_path):
@@ -317,23 +362,33 @@ if stage("integer") and "results/bits-round/soliton-A8-B8.json" in by_path:
     for name, A, B, rnd, ref in INT:
         out = os.path.join(TMP, f"int-{name}-A{A}-B{B}-r{rnd}.json")
         r = run("-I", "intring.py", LAB, os.path.join(SNAP, "exports", f"{name}.json"), str(A), str(B), "256", out, str(rnd))
-        got, want = json.load(open(out))["acc"], json.load(open(os.path.join(SNAP, "results", ref)))["acc"]
-        check(r.returncode == 0 and finite(*got, *want) and got == want,
-              f"integer ring {name} A={A} B={B} rnd={rnd} reproduces {ref} exactly (Acc(0) {got[0]:.3f})")
+        got = json.load(open(out))["acc"] if r.returncode == 0 else []
+        want = json.load(open(os.path.join(SNAP, "results", ref)))["acc"]
+        full = len(got) == len(want) == 13                              # intring.py scores sigma 0, 0.1, ..., 1.2
+        check(full and finite(*got, *want) and got == want,
+              f"integer ring {name} A={A} B={B} rnd={rnd} reproduces {ref} exactly"
+              + (f" (Acc(0) {got[0]:.3f})" if full else f": {len(got)} replayed and {len(want)} frozen of 13 points"))
 
 # float replay
 if stage("float") and "results/probe2-soliton-4000.json" in by_path:
     FLOAT = [("soliton", "0.0,0.7")] + ([("soliton", "0.0,0.5,0.8"), ("pure", "0.0,0.7")] if FULL else [])
     for kind, sig in FLOAT:
+        frozen_rows = json.load(open(os.path.join(SNAP, "results", f"probe2-{kind}-4000.json")))["rows"]
+        if sigmas(frozen_rows) != GRID["probe"]:
+            check(False, f"float {kind}: the frozen reference holds {len(frozen_rows)} rows, not the 41-point grid")
+            continue
         out = os.path.join(TMP, f"probe-{kind}-{sig.replace(',', '_')}.json")
         r = run("-I", "probe.py", LAB, os.path.join(SNAP, "checkpoints", f"{kind}-T032-s900-step04000.pt"), out, "2", "4096",
                 sig)
         if r.returncode:
             check(False, f"probe {kind} {sig}")
             continue
-        want = {round(x["sigma"], 2): x for x in json.load(open(os.path.join(SNAP, "results",
-                                                                              f"probe2-{kind}-4000.json")))["rows"]}
-        for row in json.load(open(out))["rows"]:
+        want = {round(x["sigma"], 2): x for x in frozen_rows}
+        replayed = json.load(open(out))["rows"]
+        if sigmas(replayed) != [round(float(v), 2) for v in sig.split(",")]:
+            check(False, f"float {kind}: the replay returned sigmas {sigmas(replayed)}, asked for {sig}")
+            continue
+        for row in replayed:
             w = want[round(row["sigma"], 2)]
             ok = finite(*(row[k] for k in ("acc_fixed", "acc_probe")), *(w[k] for k in ("acc_fixed", "acc_probe")))
             gap = max(abs(row[k] - w[k]) * 4096 for k in ("acc_fixed", "acc_probe")) if ok else float("inf")
@@ -345,13 +400,22 @@ if stage("float") and "results/probe2-soliton-4000.json" in by_path:
 if stage("rounding") and any(p.startswith("results/rounding/") for p in by_path):
     for m, b, mode in ROUND + (ROUND_FULL if FULL else []):
         ref = f"results/rounding/{m}-A{b}-B{b}-{mode}.json"
-        frozen = {round(r["sigma"], 2): r for r in json.load(open(os.path.join(SNAP, ref)))["rows"]}
+        frozen_rows = json.load(open(os.path.join(SNAP, ref)))["rows"]
+        if sigmas(frozen_rows) != GRID["rounding"]:
+            check(False, f"rounding {m} A={b} {mode}: the frozen reference holds {len(frozen_rows)} rows, "
+                  f"not the 13-point grid")
+            continue
+        frozen = {round(r["sigma"], 2): r for r in frozen_rows}
         out = os.path.join(TMP, f"rounding-{m}-A{b}-{mode}.json")
         r = run("rounding.py", LAB, find("exports", f"{m}.json"), str(b), str(b), mode, out, "512", "0.0,0.2")
         if r.returncode:
             check(False, f"rounding {m} A={b} {mode}")
             continue
-        for row in json.load(open(out))["rows"]:
+        replayed = json.load(open(out))["rows"]
+        if sigmas(replayed) != [0.0, 0.2]:
+            check(False, f"rounding {m} A={b} {mode}: the replay returned sigmas {sigmas(replayed)}, asked for 0.0, 0.2")
+            continue
+        for row in replayed:
             w = frozen[round(row["sigma"], 2)]
             keys = [k for k in w if k != "sigma"]
             ok = all(k in row and finite(row[k], w[k]) for k in keys)
@@ -362,15 +426,18 @@ if stage("rounding") and any(p.startswith("results/rounding/") for p in by_path)
 # honest-decoder replay (slow: every sigma of calibration and test, so only with --full or --only readout)
 if (FULL or (ONLY and "readout" in ONLY)) and "results/readout/soliton-s900.json" in by_path:
     out = os.path.join(TMP, "readout-soliton-s900.json")
-    cpu = next((ln.split(":", 1)[1].strip() for ln in open("/proc/cpuinfo") if ln.startswith("model name")), "?")
-    print(f"--  readout replay on {cpu}", flush=True)
-    r = run("readout.py", LAB, find("checkpoints", "soliton-T032-s900-step04000.pt"), out, "2048", "2")
-    if r.returncode:
-        check(False, "readout soliton s900")
+    frozen = json.load(open(os.path.join(SNAP, "results/readout/soliton-s900.json")))["rows"]
+    if sigmas(frozen) != GRID["readout"]:   # checked before the 3-minute replay, which then has nothing to stand on
+        check(False, f"readout soliton s900: the frozen reference holds {len(frozen)} rows, not the 25-point grid")
     else:
-        frozen = json.load(open(os.path.join(SNAP, "results/readout/soliton-s900.json")))["rows"]
+        print(f"--  readout replay on {cpu_name()}", flush=True)
+        r = run("readout.py", LAB, find("checkpoints", "soliton-T032-s900-step04000.pt"), out, "2048", "2")
+        replayed = json.load(open(out))["rows"] if r.returncode == 0 else []
+        if r.returncode or sigmas(replayed) != GRID["readout"]:
+            check(False, f"readout soliton s900: the replay returned {len(replayed)} rows, not the 25-point grid")
+            replayed = []
         accs = ("fixed", "pooled", "sensor", "sigma_lda", "oracle")
-        for row, w in zip(json.load(open(out))["rows"], frozen):
+        for row, w in zip(replayed, frozen):
             if not all(finite(row[k], w[k]) for k in accs + ("D", "K")):
                 check(False, f"readout soliton s900 sigma {row['sigma']:.2f}: nonfinite value")
                 continue

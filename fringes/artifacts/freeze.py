@@ -185,7 +185,12 @@ def main():
     if unmatched:
         print("not frozen (no spec):", *unmatched, sep="\n  ")
     head = subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True, cwd=LAB).stdout.strip()
-    cpu = next((ln.split(":", 1)[1].strip() for ln in open("/proc/cpuinfo") if ln.startswith("model name")), "?")
+    try:   # there is no /proc on macOS; the CPU name is provenance, not a reason to fail
+        with open("/proc/cpuinfo") as f:
+            cpu = next((ln.split(":", 1)[1].strip() for ln in f if ln.startswith("model name")), "?")
+    except OSError:
+        r = subprocess.run(["sysctl", "-n", "machdep.cpu.brand_string"], capture_output=True, text=True)
+        cpu = r.stdout.strip() or platform.processor() or platform.machine() or "?"
     manifest = {
         "snapshot": os.path.basename(OUT.rstrip("/")),
         "what": "post hoc fringes runs behind fringes/README.md; not part of the phs-soliton PREREG v1 verdict",
