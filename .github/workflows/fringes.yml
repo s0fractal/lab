@@ -42,4 +42,4 @@ jobs:
       - name: transfer (one whole run with the frozen decoders) and clock law, replayed from the frozen checkpoints
         run: phs-soliton/.venv/bin/python fringes/artifacts/verify.py fringes/artifacts/transfer-2026-10-29b --full
       - name: the transfer check must be able to fail
-        run: phs-soliton/.venv/bin/python fringes/artifacts/verify.py fringes/artifacts/transfer-2026-10-29b --bite
+        run: phs-soliton/.venv/bin/python fringes/artifacts/verify.py fringes/artifacts/transfer-2026-10-29b --bite --full

@@ -1,5 +1,5 @@
 """Check a frozen snapshot and replay results from its weights, without training (post hoc play).
-Usage: artifacts/verify.py SNAPSHOT_DIR [--full | --bite | --only STAGE,...]   (uses the phs-soliton venv's python)
+Usage: artifacts/verify.py SNAPSHOT_DIR [--full] [--bite] [--only STAGE,...]   (uses the phs-soliton venv's python)
 
 A stage runs when its inputs are in the snapshot; a checkpoint or export it needs may live in a sibling snapshot
 (the rounding study reuses the checkpoints and seed-900 exports of pr7-2026-10-28).
@@ -45,8 +45,12 @@ A stage runs when its inputs are in the snapshot; a checkpoint or export it need
   transfer  transfer.py --cells replays the model's own readout and the oracle at sigma = 0 for T = 24 and 48 (Soliton
             and Pure, seed 900): the time-locked readout, within one binomial standard error of 512 (at least 3);
             --full adds the whole transfer.py run of Soliton seed 900 with the frozen decoders (fresh, between, beyond,
-            T = 24 and 48: 60 test cells, a few minutes): every accuracy within one binomial standard error of 512
-            (at least 3), D within 1e-3 relative, the sigma cell, the edges and the calibration check exactly
+            T = 24 and 48: 60 test cells, a few minutes): every accuracy of a frozen decoder within one binomial
+            standard error of 512 (at least 3), D within 1e-3 relative, the sigma cell, the edges and the calibration
+            check exactly. The oracle is refit on the 512 states of each cell, so where the dynamics at T = 48 and
+            sigma >= 0.85 lets the last bits change a few states, they move its fit: one float32 ulp of noise on the
+            weights moved it by 1.03 standard errors at sigma = 1.15 and an AMD EPYC runner by 1.54, while the frozen
+            decoders moved by at most 0.39. It gets three standard errors (at least 3 sequences)
   clocklaw  clocklaw.py replays Soliton seed 900 at T = 48: the overlap r(sigma) and the norm at all 25 sigmas within
             0.01, the first zero sigma0 within 0.005 (averages of 1024 float states; another CPU moves them by ~1e-5)
   --bite    the check must be able to fail, on copies with the manifest updated to match each change: one flipped
@@ -296,7 +300,8 @@ def bite_transfer():
     """A flipped byte fails the hashes; a moved overlap (T = 48, sigma 0.60, by 0.1), a moved readout accuracy
     (T = 48, sigma 0, by 30 of 512) and a moved sensor-bin edge (Pure seed 901, by 1e-3: a decoder other than the
     frozen one) fail while their neighbours pass; an emptied overlap curve and a shortened T = 24 table fail before
-    any replay."""
+    any replay. With --full the whole transfer run is replayed on the moved copy too: T = 48 must fail on the moved
+    readout, T = 24 must pass with its oracle (sigma 1.15) moved by two standard errors, inside the oracle's three."""
     def copy(name):
         d = os.path.join(TMP, name)
         shutil.rmtree(d, ignore_errors=True)
@@ -311,6 +316,9 @@ def bite_transfer():
     b = copy("bite-moved")
     poison_json(os.path.join(b, cl), lambda d: d["T48"]["r"].__setitem__(12, d["T48"]["r"][12] + 0.1))
     poison_json(os.path.join(b, tr), lambda d: d["T48"][0].__setitem__("fixed", d["T48"][0]["fixed"] + 30 / 512))
+    # the refit oracle at T = 24, sigma 1.15 moved by two standard errors: inside its three, outside one
+    poison_json(os.path.join(b, tr), lambda d: d["T24"][23].__setitem__(
+        "oracle", d["T24"][23]["oracle"] + 2 * math.sqrt(d["T24"][23]["oracle"] * (1 - d["T24"][23]["oracle"]) / 512)))
     rehash(b, [cl, tr])
     poison_json(os.path.join(b, "results/transfer/pure-s901.json"),
                 lambda d: d["edges"].__setitem__(7, d["edges"][7] + 1e-3))
@@ -320,12 +328,12 @@ def bite_transfer():
     poison_json(os.path.join(e, tr), lambda d: d.__setitem__("T24", d["T24"][:-1]))
     rehash(e, [cl, tr])
     plans = [(a, "hashes", []),
-             (b, "hashes,decoder,clocklaw,transfer", ["BAD clocklaw soliton s900 T48 sigma 0.60",
-                                                       "ok  clocklaw soliton s900 T48 sigma 0.55",
-                                                       "BAD transfer soliton s900 T48 sigma 0.00",
-                                                       "ok  transfer soliton s900 T24 sigma 0.00",
-                                                       "BAD decoder pure s901", "ok  decoder pure s900",
-                                                       "ok  SHA-256"]),
+             (b, "hashes,decoder,clocklaw,transfer" + (",transfer-full" if FULL else ""),
+              ["BAD clocklaw soliton s900 T48 sigma 0.60", "ok  clocklaw soliton s900 T48 sigma 0.55",
+               "BAD transfer soliton s900 T48 sigma 0.00", "ok  transfer soliton s900 T24 sigma 0.00",
+               "BAD decoder pure s901", "ok  decoder pure s900", "ok  SHA-256"]
+              + (["BAD transfer-full soliton s900 T48", "ok  transfer-full soliton s900 T24",
+                  "ok  transfer-full soliton s900 fresh"] if FULL else [])),
              (e, "hashes,clocklaw,transfer", ["BAD clocklaw soliton s900: the frozen reference",
                                                "BAD transfer soliton s900: the frozen reference", "ok  SHA-256"])]
     failed = []
@@ -706,21 +714,24 @@ if (FULL or (ONLY and "transfer-full" in ONLY)) and "results/transfer/soliton-s9
             if [r_.get("sigma") for r_ in got] != v:
                 check(False, f"transfer-full soliton s900 {p_}: {len(got)} rows replayed, {len(v)} asked for")
                 continue
-            gaps, worst_ = [], (0.0, "")
+            gaps, worst_ = [], {"frozen": (0.0, ""), "oracle": (0.0, "")}
             for row, w in zip(got, frozen[p_]):
                 ks = [k for k in w if k not in ("sigma", "sigma_cell", "D")]
                 if not all(k in row and finite(row[k], w[k]) for k in ks + ["D"]) or \
                         row["sigma_cell"] != w["sigma_cell"]:
                     gaps.append(math.inf)
                     continue
-                for k in ks:
-                    g = abs(row[k] - w[k]) * 512 / max(3.0, math.sqrt(w[k] * (1 - w[k]) * 512))
+                for k in ks:                                               # the refit oracle: see the docstring
+                    se = math.sqrt(w[k] * (1 - w[k]) * 512) * (3 if k == "oracle" else 1)
+                    g = abs(row[k] - w[k]) * 512 / max(3.0, se)
                     gaps.append(g)
-                    worst_ = max(worst_, (g, f"{k} at sigma {w['sigma']}"))
+                    side = "oracle" if k == "oracle" else "frozen"
+                    worst_[side] = max(worst_[side], (g, f"{k} at sigma {w['sigma']}"))
                 gaps.append(abs(row["D"] - w["D"]) / max(abs(w["D"]), 1e-12) / 1e-3)
             exact = new.get(p_) == frozen[p_]
-            check(max(gaps) <= 1, f"transfer-full soliton s900 {p_}: {len(v)} cells, "
-                  + ("exact" if exact else f"tightest {worst_[1]} at {worst_[0]:.2f} of its bound"))
+            check(max(gaps) <= 1, f"transfer-full soliton s900 {p_}: {len(v)} cells, " + ("exact" if exact else
+                  f"frozen decoders: tightest {worst_['frozen'][1]} at {worst_['frozen'][0]:.2f} of one SE; oracle: "
+                  f"{worst_['oracle'][1]} at {worst_['oracle'][0]:.2f} of three"))
 
 # clock-law replay: the readout-free overlap at T = 48
 if stage("clocklaw") and "results/clocklaw/soliton-s900.json" in by_path:
