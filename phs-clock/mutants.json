@@ -1,0 +1,169 @@
+{
+ "about": "Each mutant is one exact find/replace in one file; every named test must fail on an assertion (mutants.py).",
+ "mutants": {
+  "M01": {
+   "claim": "sigma_crit counts a cell exactly at the threshold",
+   "file": "analyze.py",
+   "find": "        if a >= threshold:\n",
+   "replace": "        if a > threshold:\n",
+   "kills": [
+    "tests.test_analyze.SigmaCrit.test_contiguous_from_zero_and_threshold_inclusive"
+   ]
+  },
+  "M03": {
+   "claim": "the stratified test is two-sided",
+   "file": "analyze.py",
+   "find": "return float((hi.sum() + lo.sum()) / total), stat, total",
+   "replace": "return float(hi.sum() / total), stat, total",
+   "kills": [
+    "tests.test_analyze.ExactTests.test_two_strata_match_enumeration_with_ties"
+   ]
+  },
+  "M04": {
+   "claim": "a single stratum is tested two-sided",
+   "file": "analyze.py",
+   "find": "np.count_nonzero(np.abs(d[0]) >= c)",
+   "replace": "np.count_nonzero(d[0] >= c)",
+   "kills": [
+    "tests.test_analyze.ExactTests.test_one_stratum_full_separation_is_two_sided"
+   ]
+  },
+  "M05": {
+   "claim": "the margin test is of Delta = -margin, not +margin",
+   "file": "analyze.py",
+   "find": "stratified_p(shifted(strata, -margin))",
+   "replace": "stratified_p(shifted(strata, margin))",
+   "kills": [
+    "tests.test_analyze.Verdicts.test_h1_and_h2_on_either_side_of_the_margin"
+   ]
+  },
+  "M06": {
+   "claim": "the side of Delta + margin decides SUPPORTED against CONTRADICTED",
+   "file": "analyze.py",
+   "find": "side = \"above\" if s_m > 0 else \"below\"",
+   "replace": "side = \"above\" if s_m < 0 else \"below\"",
+   "kills": [
+    "tests.test_analyze.Verdicts.test_h1_and_h2_on_either_side_of_the_margin",
+    "tests.test_analyze.Compute.test_kept_memory",
+    "tests.test_analyze.Compute.test_lost_memory_closes_the_line"
+   ]
+  },
+  "M07": {
+   "claim": "the sign-flip test is two-sided",
+   "file": "analyze.py",
+   "find": "np.count_nonzero(np.abs(signs @ y) >= c)",
+   "replace": "np.count_nonzero(signs @ y >= c)",
+   "kills": [
+    "tests.test_analyze.ExactTests.test_signflip_matches_enumeration"
+   ]
+  },
+  "M08": {
+   "claim": "H3 is SUPPORTED only with the mean inside the interval and both ends rejected",
+   "file": "analyze.py",
+   "find": "if p_lo < alpha and p_hi < alpha and lo < mean < hi:",
+   "replace": "if p_lo < alpha or p_hi < alpha:",
+   "kills": [
+    "tests.test_analyze.Verdicts.test_h3_interval"
+   ]
+  },
+  "M09": {
+   "claim": "H3 needs at least min_runs revivals",
+   "file": "analyze.py",
+   "find": "    if len(x) < min_runs:\n",
+   "replace": "    if len(x) < 1:\n",
+   "kills": [
+    "tests.test_analyze.Verdicts.test_h3_interval"
+   ]
+  },
+  "M10": {
+   "claim": "the gate excludes runs below Acc 0.95 at sigma 0",
+   "file": "analyze.py",
+   "find": "gate=bool(native[0] >= rule[\"gate_acc\"] - EPS)",
+   "replace": "gate=True",
+   "kills": [
+    "tests.test_analyze.Compute.test_gate_excludes_runs_and_strata"
+   ]
+  },
+  "M11": {
+   "claim": "a T enters only with min_runs gated runs of both arms",
+   "file": "analyze.py",
+   "find": "enters = len(xa) >= min_runs and len(xb) >= min_runs",
+   "replace": "enters = len(xa) >= 1 and len(xb) >= 1",
+   "kills": [
+    "tests.test_analyze.Compute.test_gate_excludes_runs_and_strata"
+   ]
+  },
+  "M12": {
+   "claim": "H3 reads gated Soliton runs only",
+   "file": "analyze.py",
+   "find": "r[\"kind\"] == \"soliton\" and r[\"gate\"] and r[\"revival\"]]",
+   "replace": "r[\"kind\"] == \"soliton\" and r[\"revival\"]]",
+   "kills": [
+    "tests.test_analyze.Compute.test_gate_excludes_runs_and_strata"
+   ]
+  },
+  "M13": {
+   "claim": "a tie on the play cells takes the sensor",
+   "file": "analyze.py",
+   "find": "\"sensor\" if out[\"play_sensor\"] >= out[\"play_pooled\"] else \"pooled\"",
+   "replace": "\"sensor\" if out[\"play_sensor\"] > out[\"play_pooled\"] else \"pooled\"",
+   "kills": [
+    "tests.test_analyze.Compute.test_decoder_choice_tie_takes_sensor"
+   ]
+  },
+  "M14": {
+   "claim": "the decoder is chosen on the play cells, not on the test rows",
+   "file": "analyze.py",
+   "find": "out[\"honest\"] = out[f\"honest_{out['choice']}\"]",
+   "replace": "out[\"honest\"] = max(out.get(\"honest_sensor\", -1), out[\"honest_pooled\"])",
+   "kills": [
+    "tests.test_analyze.Compute.test_decoder_choice_tie_takes_sensor"
+   ]
+  },
+  "M15": {
+   "claim": "a revival must rise above chance + margin",
+   "file": "analyze.py",
+   "find": "e[1] > CHANCE + margin]",
+   "replace": "e[1] > CHANCE]",
+   "kills": [
+    "tests.test_analyze.Revival.test_no_revival"
+   ]
+  },
+  "M16": {
+   "claim": "the continuation rule reads H1 SUPPORTED only",
+   "file": "analyze.py",
+   "find": "line = \"CONTINUE\" if h1[\"verdict\"] == \"SUPPORTED\" else \"CLOSE\"",
+   "replace": "line = \"CONTINUE\" if h1[\"verdict\"] != \"INCONCLUSIVE\" else \"CLOSE\"",
+   "kills": [
+    "tests.test_analyze.Compute.test_lost_memory_closes_the_line"
+   ]
+  },
+  "M17": {
+   "claim": "admission refuses a PHS run whose play check was not exact",
+   "file": "analyze.py",
+   "find": "h.get(\"play_check\") != \"exact\"",
+   "replace": "False",
+   "kills": [
+    "tests.test_analyze.Admission.test_refusals"
+   ]
+  },
+  "M18": {
+   "claim": "admission refuses a checkpoint that is not the one the run saved",
+   "file": "analyze.py",
+   "find": "if not ckpt.exists() or sha256(ckpt) != m.get(\"checkpoint_sha256\"):",
+   "replace": "if not ckpt.exists():",
+   "kills": [
+    "tests.test_analyze.Admission.test_refusals"
+   ]
+  },
+  "M19": {
+   "claim": "admission refuses a missing run",
+   "file": "analyze.py",
+   "find": "    problems += [f\"no manifest for run A-{k}-T{T:03d}-s{s}\" for k, T, s in missing]\n",
+   "replace": "",
+   "kills": [
+    "tests.test_analyze.Admission.test_refusals"
+   ]
+  }
+ }
+}

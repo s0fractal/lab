@@ -6,6 +6,7 @@
 |---|---|---|
 | [`phs-soliton/`](phs-soliton/) | Порт-гамільтонові та солітонні рекурентні резервуари проти GRU: [стартер](phs-soliton/starter/port-hamiltonian-soliton-reservoirs.md), [goal](phs-soliton/GOAL.md) | PREREG v1 (тег `prereg-v1`), 160 підтверджувальних прогонів, вердикт `INCONCLUSIVE`: [REPORT](phs-soliton/REPORT.md), [RESULTS](phs-soliton/RESULTS.md) |
 | [`fringes/`](fringes/) | Пісочниця, не експеримент: post hoc розвідка смуг точності Soliton-PHS (пам'ять прецесує з кутом ∝ σ²) | розвідка, без PREREG і без вердикту: [README](fringes/README.md) |
+| [`phs-clock/`](phs-clock/) | Один підтверджувальний тест годинника з `fringes/`: чи пам'ять Soliton-PHS збережена й лише повернута шумом, на свіжих seeds і з замороженим чесним декодером: [стартер](phs-clock/starter/README.md), [goal](phs-clock/GOAL.md) | PREREG v1 ([PREREG](phs-clock/PREREG.md)), прогони попереду |
 
 Перевірка тверджень стартера `phs-soliton`:
 
