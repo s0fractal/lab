@@ -1,0 +1,14 @@
+You are reviewing a pre-registration before it is frozen by a git tag. Repository: REVIEW_TREE (a detached worktree of the private repository s0fractal/lab), directory phs-clock/, commit REVIEW_COMMIT.
+
+Read GOAL.md (the brief, in Ukrainian), starter/README.md (the sources, in Ukrainian), prereg.json (the source) and PREREG.md (its rendering), analyze.py (the frozen verdict computation), decode.py (the honest decoding of a trained model), run.py (the confirmatory runner), tests/test_analyze.py, mutants.json and mutants.py. The code this experiment reuses unchanged is phs-soliton/phs/*.py, phs-soliton/prereg.json and phs-soliton/tools/confirm.py (load_verified), and fringes/readout.py, fringes/transfer.py and fringes/fringe_scan.py; fringes/README.md describes where the reused decoders come from.
+
+Find defects that would make a verdict wrong, unreproducible, or open to choices made after seeing results:
+1. places where analyze.py or decode.py do not compute what prereg.json states;
+2. ambiguities or contradictions in the verdict rules (H1, H2, H3, the learnability gate, the decoder choice, the continuation rule);
+3. leaks of test cells or test labels into decoder fitting, decoder choice or checkpoint selection;
+4. unfair differences between the models in training, evaluation or decoding;
+5. statistical errors in the exact tests (stratification by T, two-sidedness, the test at the margin, the sign-flip test);
+6. ways the runner can produce, or the analysis accept, results that do not correspond to the frozen code and PREREG;
+7. departures from GOAL.md that are not recorded as decisions with a reason.
+
+You may run the tests (from phs-clock/: ../phs-soliton/.venv/bin/python -m unittest discover -s tests -t .), the mutants (../phs-soliton/.venv/bin/python mutants.py) and the PREREG check (../phs-soliton/.venv/bin/python prereg.py check). Do not train models, do not modify tracked files, do not commit or push. For each finding give file:line, a concrete failure scenario, and a severity (P1 blocks freezing, P2 should be fixed before freezing, P3 note). End with one line: ACCEPT or AMEND.

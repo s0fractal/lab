@@ -1,0 +1,21 @@
+name: phs-clock
+on:
+  push:
+    branches: [main]
+  pull_request:
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: phs-clock
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: "0.12.5"
+      - run: uv sync --frozen
+        working-directory: phs-soliton
+      - run: ../phs-soliton/.venv/bin/python -m unittest discover -s tests -t . -v
+      - run: ../phs-soliton/.venv/bin/python mutants.py
+      - run: ../phs-soliton/.venv/bin/python prereg.py check
