@@ -5,6 +5,7 @@ from __future__ import annotations
 import copy
 import itertools
 import json
+import shutil
 import sys
 import unittest
 from pathlib import Path
@@ -115,13 +116,16 @@ class ExactTests(unittest.TestCase):
         self.assertEqual((p, n), (2 / 70, 70))
         self.assertAlmostEqual(stat, -0.4)
 
-    def test_signflip_matches_enumeration(self):
-        x = [1.9, 2.1, 1.8, 1.95, 2.3]
-        for mu in (1.75, 2.0, 2.25):
-            y = np.asarray(x) - mu
-            hits = sum(abs(sum(s * v for s, v in zip(signs, y))) >= abs(y.sum()) - 1e-9
-                       for signs in itertools.product((-1, 1), repeat=len(x)))
-            self.assertAlmostEqual(analyze.signflip_p(x, mu), hits / 32, places=12)
+    def test_sign_test_is_exact_two_sided_and_drops_ties(self):
+        x = [1.9, 2.1, 1.8, 1.95, 2.3, 1.7, 2.0, 2.25]
+        for m0 in (1.75, 2.0, 2.25):
+            above = sum(v > m0 + 1e-9 for v in x)
+            below = sum(v < m0 - 1e-9 for v in x)
+            n = above + below
+            # enumeration of every equally likely sign pattern of the n untied values
+            obs = abs(above - below)
+            hits = sum(abs(2 * sum(bits) - n) >= obs for bits in itertools.product((0, 1), repeat=n))
+            self.assertEqual(analyze.sign_test(x, m0), (hits / 2 ** n, above, below))
 
 
 class Verdicts(unittest.TestCase):
@@ -149,6 +153,11 @@ class Verdicts(unittest.TestCase):
         self.assertEqual(analyze.interval_test(cubic, 1.75, 2.25, 0.05, 6)["verdict"], "CONTRADICTED")
         edge = [1.75 + 0.2 * (i % 2 * 2 - 1) for i in range(12)]
         self.assertEqual(analyze.interval_test(edge, 1.75, 2.25, 0.05, 6)["verdict"], "INCONCLUSIVE")
+        # Codex r1 F1: a heavy outlier moves the mean out of the interval, not the median the claim is about
+        outliers = [(1.15 / 0.8) ** 2] * 18 + [(1.2 / 0.5) ** 2] * 2
+        r = analyze.interval_test(outliers, 1.75, 2.25, 0.05, 6)
+        self.assertEqual((r["verdict"], r["inside"]), ("SUPPORTED", 18))
+        self.assertGreater(r["mean"], 2.25)
         self.assertEqual(analyze.interval_test(near[:5], 1.75, 2.25, 0.05, 6)["verdict"], "INCONCLUSIVE")
         self.assertEqual(analyze.interval_test(near[:7], 1.75, 2.25, 0.05, 6)["verdict"], "SUPPORTED")
         self.assertEqual(analyze.interval_test(near[:7], 1.75, 2.25, 0.05, 8)["verdict"], "INCONCLUSIVE")
@@ -212,6 +221,25 @@ class Compute(unittest.TestCase):
         self.assertEqual(len(out["H1"]["by_T"]["32"]["soliton"]), 9)
         self.assertEqual(out["H3"]["n"], 12)                      # gated Soliton runs only: 9 at T 32, 3 at T 64
 
+    def test_unreadable_decoder_makes_h1_inconclusive(self):
+        """Codex r1 F3: both honest decoders read nothing, so both arms tie at -0.05; parity is no readable memory."""
+        ms = self.runs()
+        for m in ms:
+            for r in m["honest"]["rows"]:
+                r.update({k: 0.5 for k in m["honest"]["decoders"] if k != "fixed"})
+            for r in m["honest"].get("play", []):
+                r.update(sensor=0.5, pooled=0.5)
+        out = analyze.compute(PREREG, ms, FRINGES)
+        self.assertFalse(out["H1"]["adequacy"]["holds"])
+        self.assertEqual((out["H1"]["verdict"], out["line"]), ("INCONCLUSIVE", "CLOSE"))
+
+    def test_interval_stays_in_its_bounds(self):
+        self.assertEqual(analyze.interval([([2.0] * 4, [0.0] * 4)], 0.05, 0.005), [1.0, 1.0])
+
+    def test_failed_reason_is_kept(self):
+        m = {"kind": "pure", "T": 32, "seed": 300, "status": "FAILED", "reason": "training: RuntimeError: x"}
+        self.assertEqual(analyze.measures(m, PREREG, FRINGES).get("reason"), "training: RuntimeError: x")
+
     def test_decoder_choice_tie_takes_sensor(self):
         m = manifest("pure", 32, 300, step(0.8), {"sensor": step(0.7), "pooled": step(0.8)},
                      play={"sensor": step(0.9, CAL), "pooled": step(0.9, CAL)})
@@ -234,14 +262,18 @@ class Admission(unittest.TestCase):
                                                   n=d["n_test"])
             if m["kind"] in analyze.PHS:
                 m["honest"]["play_check"] = "exact"
-        self.ckpt_dir = ROOT / "results" / "checkpoints"
         self.orig = analyze.ROOT
         analyze.ROOT = self.tmp
-        (self.tmp / "results" / "checkpoints").mkdir(parents=True, exist_ok=True)
+        shutil.rmtree(self.tmp, ignore_errors=True)
+        for sub in ("checkpoints", "attempts"):
+            (self.tmp / "results" / sub).mkdir(parents=True)
         for m in self.manifests:
-            p = self.tmp / "results" / "checkpoints" / f"A-{m['kind']}-T{m['T']:03d}-s{m['seed']}.pt"
+            stem = f"A-{m['kind']}-T{m['T']:03d}-s{m['seed']}"
+            p = self.tmp / "results" / "checkpoints" / f"{stem}.pt"
             p.write_bytes(b"x")
-            m["checkpoint_sha256"] = analyze.sha256(p)
+            m.update(checkpoint_sha256=analyze.sha256(p), attempt=f"{stem}.0.json", interrupted_attempts=[],
+                     state_sha256="S", interrupted_state_sha256=None)
+            (self.tmp / "results" / "attempts" / f"{stem}.0.json").write_text("{}")
 
     def tearDown(self):
         analyze.ROOT = self.orig
@@ -273,6 +305,31 @@ class Admission(unittest.TestCase):
         cases.append(("config", ms))
         ms = copy.deepcopy(self.manifests)
         cases.append(("duplicate", ms + [copy.deepcopy(ms[0])]))
+        for label, bad in (("infinite", float("inf")), ("above one", 1.5), ("string", "0.9"), ("bool", True)):
+            ms = copy.deepcopy(self.manifests)
+            ms[0]["cells"]["0.00"]["acc"] = bad
+            cases.append((f"native {label}", ms))
+            ms = copy.deepcopy(self.manifests)
+            ms[0]["honest"]["rows"][3]["sensor"] = bad
+            cases.append((f"honest {label}", ms))
+        ms = copy.deepcopy(self.manifests)
+        ms[0]["honest"]["decoders"] = ["fixed", "pooled", "sensor"]
+        cases.append(("decoder list", ms))
+        ms = copy.deepcopy(self.manifests)
+        del ms[0]["honest"]["rows"][5]["pooled"]
+        cases.append(("missing field", ms))
+        ms = copy.deepcopy(self.manifests)
+        ms[0] = {k: v for k, v in ms[0].items() if k in ("kind", "task", "T", "seed", "cfg", "environment",
+                                                           "prereg_sha256", "tag_commit", "attempt",
+                                                           "interrupted_attempts")}
+        ms[0]["status"] = "FAILED"
+        cases.append(("failed without reason", ms))
+        ms = copy.deepcopy(self.manifests)
+        ms[0]["interrupted_attempts"] = [ms[0]["attempt"].replace(".0.", ".1.")]
+        cases.append(("unrecorded attempt", ms))
+        ms = copy.deepcopy(self.manifests)
+        ms[0]["interrupted_state_sha256"] = "other"
+        cases.append(("redo differs", ms))
         for label, ms in cases:
             with self.subTest(label):
                 self.assertNotEqual(analyze.admit(PREREG, "P", "C", self.named(ms)), [])

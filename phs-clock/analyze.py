@@ -15,6 +15,7 @@ import ast
 import hashlib
 import itertools
 import json
+import math
 import subprocess
 import sys
 from pathlib import Path
@@ -115,14 +116,15 @@ def shifted(strata: list, theta: float) -> list:
     return [([x - theta for x in a], b) for a, b in strata]
 
 
-def interval(strata: list, alpha: float, step: float) -> list:
-    """Descriptive: [lowest, highest] of the shifts theta on a grid of `step`, contiguous around the observed Delta,
-    that the two-sided test does not reject at alpha."""
-    centre = round(stratified_p(strata)[1] / step) * step
+def interval(strata: list, alpha: float, step: float, bound: float = 1.0) -> list:
+    """Descriptive: [lowest, highest] of the shifts theta on a grid of `step` in [-bound, bound], contiguous around
+    the observed Delta, that the two-sided test does not reject at alpha (an end at +-bound may be cut there)."""
+    centre = min(bound, max(-bound, round(stratified_p(strata)[1] / step) * step))
     ends = []
     for direction in (-1, 1):
         t = centre
-        while abs(t - centre) < 2 and stratified_p(shifted(strata, t + direction * step))[0] >= alpha:
+        while abs(t + direction * step) <= bound + EPS \
+                and stratified_p(shifted(strata, t + direction * step))[0] >= alpha:
             t += direction * step
         ends.append(round(t, 6))
     return ends
@@ -142,47 +144,51 @@ def margin_test(strata: list, margin: float, alpha: float, supported_side: str) 
     return {"delta": delta, "p_at_margin": p_m, "p_at_zero": p_0, "splits": n, "verdict": verdict}
 
 
-def signflip_p(x: list, mu0: float) -> float:
-    """Two-sided exact sign-flip test of H0: the x are symmetric about mu0; every one of the 2^n sign vectors."""
-    y = np.asarray(x, float) - mu0
-    n = len(y)
-    c = abs(y.sum()) - EPS
-    if c <= 0:
-        return 1.0
-    count, bits = 0, np.arange(n)
-    for start in range(0, 2 ** n, 1 << 16):
-        rows = np.arange(start, min(start + (1 << 16), 2 ** n))
-        signs = ((rows[:, None] >> bits) & 1) * 2 - 1
-        count += int(np.count_nonzero(np.abs(signs @ y) >= c))
-    return count / 2 ** n
+def sign_test(x: list, m0: float) -> tuple[float, int, int]:
+    """Two-sided exact sign test of H0: the median of x is m0 (values equal to m0 dropped). (p, above, below)."""
+    above = sum(1 for v in x if v > m0 + EPS)
+    below = sum(1 for v in x if v < m0 - EPS)
+    n, k = above + below, min(above, below)
+    if n == 0:
+        return 1.0, above, below
+    return min(1.0, 2 * sum(math.comb(n, i) for i in range(k + 1)) / 2 ** n), above, below
 
 
 def interval_test(x: list, lo: float, hi: float, alpha: float, min_runs: int) -> dict:
-    """H3: SUPPORTED when the mean of x lies significantly above lo and significantly below hi (two-sided exact
-    sign-flip tests at each end, p < alpha); CONTRADICTED when it lies significantly outside the interval on one
-    side; INCONCLUSIVE otherwise, or with fewer than min_runs values."""
+    """H3: SUPPORTED when the median of x lies significantly above lo and significantly below hi (two-sided exact
+    sign tests at each end, p < alpha, on the side the counts show); CONTRADICTED when it lies significantly outside
+    the interval at one end; INCONCLUSIVE otherwise, or with fewer than min_runs values. A sign test needs no
+    symmetry and no model of the outliers a misread extremum makes."""
     out = {"n": len(x), "x": list(x)}
     if len(x) < min_runs:
         return {**out, "verdict": "INCONCLUSIVE", "why": f"{len(x)} runs with a visible revival, fewer than {min_runs}"}
-    mean = float(np.mean(x))
-    p_lo, p_hi = signflip_p(x, lo), signflip_p(x, hi)
-    if p_lo < alpha and p_hi < alpha and lo < mean < hi:
+    (p_lo, a_lo, b_lo), (p_hi, a_hi, b_hi) = sign_test(x, lo), sign_test(x, hi)
+    if p_lo < alpha and a_lo > b_lo and p_hi < alpha and b_hi > a_hi:
         verdict = "SUPPORTED"
-    elif (p_lo < alpha and mean < lo) or (p_hi < alpha and mean > hi):
+    elif (p_lo < alpha and b_lo > a_lo) or (p_hi < alpha and a_hi > b_hi):
         verdict = "CONTRADICTED"
     else:
         verdict = "INCONCLUSIVE"
-    return {**out, "mean": mean, "p_at_lo": p_lo, "p_at_hi": p_hi, "verdict": verdict}
+    return {**out, "median": float(np.median(x)), "mean": float(np.mean(x)),
+            "inside": sum(1 for v in x if lo <= v <= hi), "p_at_lo": p_lo, "p_at_hi": p_hi, "verdict": verdict}
+
+
+def accuracy(v) -> bool:
+    """A recorded accuracy: a finite real number in [0, 1] (a bool or a string is not one)."""
+    return isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v) and 0 <= v <= 1
 
 
 def admit(prereg: dict, prereg_sha: str, tag_commit: str, named: list) -> list:
     """Every reason the manifests (file name, manifest) cannot stand for the runs of this PREREG; [] admits them. Each
-    run of the design needs exactly one manifest, under its own name, from the tag, with the registered configuration,
-    environment and test cells, and (if OK) a checkpoint with the recorded SHA-256 and complete decoder rows."""
+    run of the design needs exactly one manifest, under its own name, from the tag, with the registered configuration
+    and environment, its attempt records (its own and those of attempts killed before a manifest; any checkpoint those
+    left reproduced), a reason if FAILED, and if OK: the registered test cells, a checkpoint with the recorded SHA-256,
+    the registered decoders and every accuracy a finite number in [0, 1]."""
     d, env = prereg["design"], prereg["environment"]
     expected = {(k, T, s) for k in d["models"] for T in d["T"] for s in d["seeds"]}
     cells = {key(s) for s in d["sigma"]}
     cal = [round(0.05 * i, 2) for i in range(25)]
+    attempts = ROOT / "results" / "attempts"
     problems, seen = [], {}
     for fname, m in named:
         try:
@@ -206,29 +212,38 @@ def admit(prereg: dict, prereg_sha: str, tag_commit: str, named: list) -> list:
         for k in ("python", "torch", "numpy"):
             if m.get("environment", {}).get(k) != env[k]:
                 problems.append(f"{fname}: {k} {m.get('environment', {}).get(k)} is not {env[k]}")
+        listed = [m.get("attempt")] + list(m.get("interrupted_attempts") or [])
+        if sorted(p.name for p in attempts.glob(f"{stem}.*.json")) != sorted(str(a) for a in listed):
+            problems.append(f"{fname}: attempt records are not this run's attempt and its interrupted ones")
         if m.get("status") == "FAILED":
+            if not str(m.get("reason") or "").strip():
+                problems.append(f"{fname}: FAILED without a reason")
             continue
         if m.get("status") != "OK":
             problems.append(f"{fname}: status {m.get('status')!r}")
             continue
+        if m.get("interrupted_state_sha256") not in (None, m.get("state_sha256")):
+            problems.append(f"{fname}: the weights differ from those an interrupted attempt saved")
         got = m.get("cells", {})
         if m.get("cell_namespace") != "test" or set(got) != cells:
             problems.append(f"{fname}: native cells are not the grid of namespace 'test'")
             continue
         for c in sorted(cells):
             if got[c].get("digest") != prereg["test_cells"]["digests"][f"A/{ident[1]}/{c}"] \
-                    or got[c].get("n") != d["n_test"]:
-                problems.append(f"{fname}: native cell {c} is not the registered one")
+                    or got[c].get("n") != d["n_test"] or not accuracy(got[c].get("acc")):
+                problems.append(f"{fname}: native cell {c} is not the registered one or has no accuracy")
         ckpt = ROOT / "results" / "checkpoints" / f"{stem}.pt"
         if not ckpt.exists() or sha256(ckpt) != m.get("checkpoint_sha256"):
             problems.append(f"{fname}: checkpoint missing or not the one the run saved")
         h = m.get("honest", {})
-        want = ("fixed", "pooled", "sensor", "oracle") if ident[0] in PHS else ("fixed", "pooled", "oracle")
+        want = ["fixed", "pooled", "sensor", "oracle"] if ident[0] in PHS else ["fixed", "pooled", "oracle"]
         rows = h.get("rows", [])
-        if [r.get("sigma") for r in rows] != d["sigma"] or any(not all(k in r for k in want) for r in rows):
-            problems.append(f"{fname}: honest rows are not the grid with {want}")
-        if ident[0] in PHS and (h.get("play_check") != "exact" or [r.get("sigma") for r in h.get("play", [])] != cal
-                                or any(not all(k in r for k in ("pooled", "sensor")) for r in h.get("play", []))):
+        if h.get("decoders") != want or [r.get("sigma") for r in rows] != d["sigma"] \
+                or any(not accuracy(r.get(k)) for r in rows for k in want):
+            problems.append(f"{fname}: honest rows are not the grid with an accuracy of each of {want}")
+        play = h.get("play", [])
+        if ident[0] in PHS and (h.get("play_check") != "exact" or [r.get("sigma") for r in play] != cal
+                                or any(not accuracy(r.get(k)) for r in play for k in ("pooled", "sensor"))):
             problems.append(f"{fname}: readout.py's play rows missing or not reproduced exactly")
     missing = sorted(expected - set(seen))
     problems += [f"no manifest for run A-{k}-T{T:03d}-s{s}" for k, T, s in missing]
@@ -239,9 +254,10 @@ def measures(m: dict, prereg: dict, fringes) -> dict:
     """One run: the gate, native and honest sigma_crit (and per decoder), the decoder choice, the revival."""
     rule, grid = prereg["rule"], prereg["design"]["sigma"]
     thr, below = rule["acc_threshold"], rule["sigma_crit_below_grid"]
-    out = {"kind": m["kind"], "T": m["T"], "seed": m["seed"], "status": m["status"]}
+    out = {"kind": m["kind"], "T": m["T"], "seed": m["seed"], "status": m["status"],
+           "interrupted_attempts": len(m.get("interrupted_attempts") or [])}
     if m["status"] != "OK":
-        return {**out, "gate": False}
+        return {**out, "gate": False, "reason": m.get("reason")}
     native = [m["cells"][key(s)]["acc"] for s in grid]
     out.update(acc0=native[0], gate=bool(native[0] >= rule["gate_acc"] - EPS),
                native=sigma_crit(native, grid, thr, below))
@@ -291,6 +307,18 @@ def compare(runs: list, a: str, b: str, metric: str, prereg: dict, supported_sid
     return out
 
 
+def adequacy(runs: list, h1: dict, margin: float) -> dict:
+    """H1 can be SUPPORTED only if the honest decoder is a competent reader: in every T entering H1, the mean honest
+    sigma_crit of Pure-PHS (no clock) is at least its mean native sigma_crit minus the margin."""
+    per_T = {}
+    for T, s in h1["by_T"].items():
+        if s["enters"]:
+            native = float(np.mean([r["native"] for r in runs if r["kind"] == "pure" and r["T"] == int(T) and r["gate"]]))
+            per_T[T] = {"pure_honest": s["mean_pure"], "pure_native": native,
+                        "holds": bool(s["mean_pure"] >= native - margin - EPS)}
+    return {"by_T": per_T, "holds": bool(per_T) and all(v["holds"] for v in per_T.values())}
+
+
 def compute(prereg: dict, manifests: list, fringes) -> dict:
     rule, d = prereg["rule"], prereg["design"]
     runs = [measures(m, prereg, fringes) for m in sorted(manifests, key=lambda m: (m["kind"], m["T"], m["seed"]))]
@@ -300,6 +328,10 @@ def compute(prereg: dict, manifests: list, fringes) -> dict:
                          "acc0": [r.get("acc0") for r in runs if r["kind"] == k and r["T"] == T]}
                 for T in d["T"]} for k in d["models"]}
     h1 = compare(runs, "soliton", "pure", "honest", prereg, "above")
+    h1["adequacy"] = adequacy(runs, h1, rule["margin"])
+    if h1["verdict"] == "SUPPORTED" and not h1["adequacy"]["holds"]:
+        h1.update(verdict="INCONCLUSIVE", why="the honest decoder does not read Pure-PHS about as well as its own "
+                                              "readout (adequacy)")
     h2 = compare(runs, "soliton", "pure", "native", prereg, "below")
     xs = [r["revival"]["x"] for r in runs if r["kind"] == "soliton" and r["gate"] and r["revival"]]
     lo, hi = rule["h3"]["interval"]
@@ -361,8 +393,9 @@ def main() -> int:
               f"{v.get('p_at_margin', float('nan')):.4g}, p at 0 {v.get('p_at_zero', float('nan')):.4g}, "
               f"interval {v.get('interval')}")
     h3 = out["H3"]
-    print(f"H3 {h3['verdict']}: n {h3['n']}, mean x {h3.get('mean', float('nan')):.3f}, p at ends "
-          f"{h3.get('p_at_lo', float('nan')):.4g} / {h3.get('p_at_hi', float('nan')):.4g}")
+    print(f"H3 {h3['verdict']}: n {h3['n']}, median x {h3.get('median', float('nan')):.3f}, inside "
+          f"{h3.get('inside')}, p at ends {h3.get('p_at_lo', float('nan')):.4g} / {h3.get('p_at_hi', float('nan')):.4g}")
+    print(f"H1 adequacy: {out['H1'].get('adequacy')}")
     print(f"gate: " + "; ".join(f"{k} " + ", ".join(f"T{T} {g['passed']}/{g['runs']}" for T, g in v.items())
                                 for k, v in out["gate"].items()))
     print(f"line: {out['line']}")

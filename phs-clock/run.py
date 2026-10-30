@@ -7,9 +7,12 @@
 
 A run trains with phs-soliton's train.run (imported by phs-soliton's own loader from bytes checked against the tag
 prereg-v1), saves its validation-selected checkpoint, then decodes it honestly (decode.py). `run` refuses unless the
-tag exists, prereg.json equals the tagged one, every file a run reads equals the tag without uncommitted changes, the
-pinned SHA-256 of prereg.json hold and the registered configurations are phs-soliton's. A worker checks the sources
-again before it starts. One manifest per run (status OK or FAILED with its reason), never overwritten.
+tag exists, prereg.json equals the tagged one, the whole repository outside the output paths equals the tag (no file
+changed, added, removed or untracked), the pinned SHA-256 of prereg.json hold and the registered configurations are
+phs-soliton's. A worker checks the sources again before it starts and leaves an attempt record before it trains. One
+manifest per run (status OK or FAILED with its reason), never overwritten. A run whose earlier attempt was killed
+before its manifest runs again from the same seed; its manifest lists the interrupted attempts, and if one of them
+left a checkpoint, the new run must reproduce its weights bit for bit or it is FAILED.
 """
 from __future__ import annotations
 
@@ -32,9 +35,7 @@ RESULTS = ROOT / "results"
 MANIFESTS = RESULTS / "manifests"
 CHECKPOINTS = RESULTS / "checkpoints"
 RUNS = ROOT / "runs"
-OUTPUTS = ("phs-clock/results", "phs-clock/REPORT.md")          # what a run may write among tracked paths
-READS = ("phs-clock", "phs-soliton/phs", "phs-soliton/prereg.json", "phs-soliton/tools/confirm.py",
-         "fringes/readout.py", "fringes/transfer.py", "fringes/fringe_scan.py")
+OUTPUTS = ("phs-clock/results", "phs-clock/REPORT.md")          # the only paths that may differ from the tag
 SMOKE_SEED = 990
 
 
@@ -66,20 +67,24 @@ def pinned_problems(prereg: dict) -> list:
 
 
 def source_problems(tag_commit: str) -> list:
-    """Every tracked file a run reads (READS, outside OUTPUTS) has the tag's bytes, and nothing uncommitted or
-    untracked sits beside them."""
-    tagged = {}
-    for line in git("ls-tree", "-r", "--full-tree", tag_commit, "--", *READS).splitlines():
-        meta, path = line.split("\t", 1)
-        if not path.startswith(OUTPUTS):
-            tagged[path] = meta.split()[2]
-    paths = sorted(tagged)
-    out = subprocess.run(["git", "hash-object", "--stdin-paths"], cwd=LAB, input="\n".join(paths), text=True,
-                         capture_output=True, check=True).stdout.split()
-    problems = [f"{p} differs from {tag_commit[:12]}" for p, h in zip(paths, out) if tagged[p] != h]
-    excludes = [f":(exclude){o}" for o in OUTPUTS]
-    dirty = git("status", "--porcelain", "--untracked-files=all", "--", *READS, *excludes)
-    return problems + [f"uncommitted: {line}" for line in dirty.splitlines()]
+    """The working tree of the whole repository, outside OUTPUTS, is the tag's: no tracked file changed, added or
+    removed since the tag (committed or not), and no untracked file (ignored ones, such as runs/ and the venv, are
+    not sources)."""
+    scope = ["--", ".", *[f":(exclude){o}" for o in OUTPUTS]]
+    changed = git("diff", "--name-status", tag_commit, *scope)
+    untracked = git("ls-files", "--others", "--exclude-standard", *scope)
+    return ([f"differs from {tag_commit[:12]}: {line}" for line in changed.splitlines()]
+            + [f"untracked: {line}" for line in untracked.splitlines()])
+
+
+def state_sha256(state: dict) -> str:
+    """SHA-256 of a state dict's tensors (names, dtypes, shapes, bytes): torch.save's file bytes vary run to run."""
+    h = hashlib.sha256()
+    for k in sorted(state):
+        t = state[k].detach().contiguous().cpu()
+        h.update(f"{k}|{t.dtype}|{tuple(t.shape)}|".encode())
+        h.update(t.numpy().tobytes())
+    return h.hexdigest()
 
 
 def preconditions() -> dict:
@@ -145,15 +150,26 @@ def work(job):
     train.setup_determinism(1)
     t0, stage, rec = time.time(), "training", None
     out = Path(ctx["out"])
+    # attempts: any record already here belongs to an attempt killed before its manifest (a job runs only without one)
+    attempts = out / "attempts"
+    attempts.mkdir(parents=True, exist_ok=True)
+    interrupted = sorted(p.name for p in attempts.glob(f"{name(kind, T, seed)}.*.json"))
+    attempt = f"{name(kind, T, seed)}.{len(interrupted)}.json"
+    (attempts / attempt).write_text(json.dumps({"started": time.strftime("%Y-%m-%dT%H:%M:%S%z"), "pid": os.getpid(),
+                                                "commit": ctx["commit"]}) + "\n")
+    ckpt = out / "checkpoints" / f"{name(kind, T, seed)}.pt"
+    left = state_sha256(torch.load(ckpt)["state"]) if interrupted and ckpt.exists() else None
     try:
         rec = train.run(kind, "A", T, seed, cfg, sigmas=tuple(ctx["sigmas"]), n_test=ctx["n_test"], namespace="test")
         if rec["status"] == "OK":
             stage = "checkpoint"
-            (out / "checkpoints").mkdir(parents=True, exist_ok=True)
-            ckpt = out / "checkpoints" / f"{name(kind, T, seed)}.pt"
-            torch.save({"kind": kind, "T": T, "seed": seed, "step": rec["best_step"], "cfg": cfg,
-                        "state": built[0].state_dict()}, ckpt)
+            ckpt.parent.mkdir(parents=True, exist_ok=True)
+            state = built[0].state_dict()
+            torch.save({"kind": kind, "T": T, "seed": seed, "step": rec["best_step"], "cfg": cfg, "state": state}, ckpt)
             rec["checkpoint_sha256"] = sha256(ckpt.read_bytes())
+            rec["state_sha256"] = state_sha256(state)
+            if left is not None and left != rec["state_sha256"]:
+                raise RuntimeError("the weights differ from those an interrupted attempt of this run saved")
             stage, t1 = "honest decoding", time.time()
             if kind in ("pure", "soliton"):
                 rec["honest"] = decode.phs(LAB, ctx["prereg"]["frozen"], ckpt, Path(ctx["work"]), ctx["sigmas"],
@@ -161,9 +177,10 @@ def work(job):
             else:
                 rec["honest"] = decode.gru(LAB, ctx["prereg"]["frozen"], ckpt, ctx["sigmas"], ctx["n_test"])
             rec["honest"]["seconds"] = time.time() - t1
-    except Exception as e:  # a crash is a recorded failure, not a silent gap
+    except (Exception, SystemExit) as e:  # a crash is a recorded failure, not a silent gap
         rec = rec or {"kind": kind, "task": "A", "T": T, "seed": seed, "cfg": cfg}
         rec.update(status="FAILED", reason=f"{stage}: {type(e).__name__}: {e}")
+    rec.update(attempt=attempt, interrupted_attempts=interrupted, interrupted_state_sha256=left)
     rec.update(commit=ctx["commit"], tag=ctx["tag"], tag_commit=ctx["tag_commit"], prereg_sha256=ctx["prereg_sha256"],
                environment=ctx["environment"], started=time.strftime("%Y-%m-%dT%H:%M:%S%z", time.localtime(t0)),
                wall_seconds_total=time.time() - t0, peak_rss_bytes_total=train.peak_rss_bytes())
@@ -251,13 +268,15 @@ def cmd_smoke(kind: str, T: int, steps: int) -> int:
     ctx = {"prereg": prereg, "prereg_sha256": "smoke", "tag": "smoke", "tag_commit": "smoke", "v1_commit": v1_commit,
            "commit": git("rev-parse", "HEAD"), "environment": environment(), "sigmas": prereg["design"]["sigma"],
            "n_test": prereg["design"]["n_test"], "out": str(smoke), "work": str(smoke / "decoders"), "smoke": True}
+    stem = name(kind, T, SMOKE_SEED)
+    for old in [smoke / "manifests" / f"{stem}.json", smoke / "checkpoints" / f"{stem}.pt",
+                *(smoke / "attempts").glob(f"{stem}.*.json")]:
+        old.unlink(missing_ok=True)                    # a smoke run is redone from scratch, never reconciled
     t0 = time.time()
     with mp.get_context("spawn").Pool(1, maxtasksperchild=1) as pool:
         rec = pool.apply(work, ((kind, T, SMOKE_SEED, cfg, ctx),))
     if "abort" in rec:
         raise SystemExit("aborted: " + "; ".join(rec["abort"]))
-    path = smoke / "manifests" / (name(kind, T, SMOKE_SEED) + ".json")
-    path.unlink(missing_ok=True)
     log(write_manifest(rec, smoke / "manifests"), rec, t0)
     return 0 if rec["status"] == "OK" else 1
 

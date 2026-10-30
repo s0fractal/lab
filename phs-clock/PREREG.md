@@ -15,7 +15,7 @@ phs-soliton PREREG v1 (tag prereg-v1) found the own readout of Soliton-PHS clear
 
 - **H1.** Kept, only rotated. Read by the honest decoder, the noise threshold of Soliton-PHS is not lower than that of Pure-PHS by the minimal effect or more: Delta_honest = sigma_crit(Soliton) - sigma_crit(Pure) > -0.05.
 - **H2.** The own readout loses (replicates v1). Read by each model's own readout, the noise threshold of Soliton-PHS is lower than that of Pure-PHS by more than the minimal effect: Delta_native < -0.05.
-- **H3.** The clock is quadratic. On Soliton-PHS runs with a visible revival, the revival lies at x = (sigma_2 / sigma_1)^2 in the interval [1.75, 2.25] around 2 (a phase growing as sigma^2 puts the first minimum at pi and the revival at 2 pi, x = 2; a linear phase gives x = 4).
+- **H3.** The clock is quadratic. On Soliton-PHS runs with a visible revival, the revival lies at x = (sigma_2 / sigma_1)^2 in the interval [1.75, 2.25] around 2: the median x lies inside it (a phase growing as sigma^2 puts the first minimum at pi and the revival at 2 pi, x = 2; a linear phase gives x = 4).
 
 ## Sources
 
@@ -160,21 +160,22 @@ Task A (selective copy-recall, 7 classes, chance 1/7), 4096 sequences per (T, si
 - **gate.** Learnability gate, its own reported measure: own-readout Acc on the test cell sigma = 0 of the run's T >= 0.95. A run that fails it, or FAILED, enters none of the comparisons; pass counts are reported per model and T.
 - **sigma_crit.** max{sigma_g : Acc(sigma') >= 0.8 for every grid sigma' <= sigma_g}; -0.05 if Acc(0) < 0.8. Per run: native (own readout) and honest (the run's decoder), plus per decoder.
 - **revival.** fringe_scan.py's fringes(), unchanged, on the own-readout curve of a run: after Acc first falls under 1/7, the extrema alternate minimum, peak, ...; sigma_1 = the first minimum; sigma_2 = the first later peak with Acc > 1/7 + 0.03, a peak at the grid edge censored. Visible revival: both exist. x = (sigma_2 / sigma_1)^2.
+- **attempts.** A worker leaves results/attempts/<run>.<k>.json before it trains. A run killed before its manifest leaves its attempt record (and maybe a checkpoint); the run is executed again from the same seed, its manifest lists the interrupted attempts, and if one left a checkpoint the new weights must equal its weights bit for bit, or the run is FAILED.
 
 ## Verdict rules
 
 Parameters: `{"acc_threshold": 0.8, "alpha": 0.05, "gate_acc": 0.95, "h3": {"interval": [1.75, 2.25], "min_runs": 6, "revival_margin": 0.03}, "interval_step": 0.005, "margin": 0.05, "min_runs_per_arm_per_T": 4, "sigma_crit_below_grid": -0.05}`
 
-- **test.** Delta = the mean over the entering T of (mean Soliton - mean Pure) over gated runs. A T enters only with at least 4 gated runs of each arm. Exact two-sided permutation test, stratified by T: every relabelling of the arms within each T (C(20, 10)^2 for ten runs per arm and T). The minimal effect is the margin 0.05 (one grid step): the test is of H0: Delta = -0.05, by shifting every Soliton value up by 0.05. The test is exact when, within each T, the two arms differ by a location shift; the interval of shifts it does not reject is reported, not used.
-- **H1.** SUPPORTED if p < 0.05 and Delta_honest > -0.05; CONTRADICTED if p < 0.05 and Delta_honest < -0.05; INCONCLUSIVE otherwise (also with no T entering).
+- **test.** Delta = the mean over the entering T of (mean Soliton - mean Pure) over gated runs. A T enters only with at least 4 gated runs of each arm. Exact two-sided permutation test, stratified by T: every relabelling of the arms within each T (C(20, 10)^2 for ten runs per arm and T). The minimal effect is the margin 0.05 (one grid step): the test is of H0: Delta = -0.05, by shifting every Soliton value up by 0.05. The test is exact when, within each T, the two arms differ by a location shift; the shifts it does not reject, contiguous around the observed Delta on a grid of 0.005 within [-1, 1], are reported, not used.
+- **H1.** SUPPORTED if p < 0.05, Delta_honest > -0.05 and the honest decoder is adequate; CONTRADICTED if p < 0.05 and Delta_honest < -0.05; INCONCLUSIVE otherwise (also with no T entering). Adequate: in every T entering H1, the mean honest sigma_crit of Pure-PHS is at least its mean native sigma_crit minus 0.05, i.e. the honest decoder reads the model without a clock about as well as its own trained readout.
 - **H2.** SUPPORTED if p < 0.05 and Delta_native < -0.05; CONTRADICTED if p < 0.05 and Delta_native > -0.05; INCONCLUSIVE otherwise.
-- **H3.** Over gated Soliton-PHS runs (both T) with a visible revival: exact two-sided sign-flip tests of H0: the x are symmetric about 1.75, and about 2.25 (all 2^n sign vectors). SUPPORTED if both reject (p < 0.05) and 1.75 < mean x < 2.25; CONTRADICTED if the mean lies outside the interval and the test at that end rejects; INCONCLUSIVE otherwise, or with fewer than 6 such runs.
+- **H3.** Over gated Soliton-PHS runs (both T) with a visible revival: exact two-sided sign tests of H0: the median x is 1.75, and of H0: the median x is 2.25 (values equal to the end dropped). SUPPORTED if both reject (p < 0.05) with the counts showing the median above 1.75 and below 2.25; CONTRADICTED if the test at one end rejects with the median outside the interval there; INCONCLUSIVE otherwise, or with fewer than 6 such runs.
 - **multiplicity.** None: each hypothesis has its own verdict, and the continuation rule reads H1 alone.
-- **continuation.** H1 SUPPORTED: the line has a usable property (the memory is kept and can be read without sigma at Pure's level or better); REPORT names the next step. H1 CONTRADICTED or INCONCLUSIVE: REPORT recommends closing the line.
+- **continuation.** H1 SUPPORTED: the line has a usable property (the memory is kept and can be read without sigma at Pure's level or better, by a decoder that reads Pure as well as its own readout does); REPORT names the next step. H1 CONTRADICTED or INCONCLUSIVE: REPORT recommends closing the line.
 
 ## Reported, not in a verdict
 
-- Gate pass counts and Acc(sigma = 0) per model and T; FAILED runs with reasons.
+- Gate pass counts and Acc(sigma = 0) per model and T; FAILED runs with their reasons; interrupted attempts.
 - Per T means of native and honest sigma_crit for every model; the lift honest - native per run.
 - Control-GRU: honest (pooled) and native sigma_crit; Soliton vs GRU and Pure vs GRU on both, with the stratified two-sided p at 0 and the non-rejected interval; no verdict (noise channels are not commensurable: PHS gets noise through the thermostat, GRU additively per token).
 - Sensitivity of H1: the same margin test with the sensor decoder only and the pooled decoder only, and the oracle bound; not verdicts.
@@ -190,11 +191,13 @@ Parameters: `{"acc_threshold": 0.8, "alpha": 0.05, "gate_acc": 0.95, "h3": {"int
 - **D4.** The decoder of a PHS run for H1 is the better of pooled and sensor on readout.py's own held-out play cells; a tie takes the sensor. *Why:* In fringes the sensor read the crystal (Soliton) and the pooled LDA the glass (Pure: sensor 0.70-0.75 against pooled 0.75): one decoder for both would handicap one arm. The play cells are not the test cells, so the choice uses no test label.
 - **D5.** The learnability gate (Acc >= 0.95 at sigma = 0) is its own reported measure; a run that fails it, or FAILED, enters no comparison. A T enters a comparison only with at least four gated runs of each arm. *Why:* A model that did not learn the task has no memory to keep or lose; v1 showed that such runs turn a retention measure into a learnability measure.
 - **D6.** Two-sided exact tests at the minimal effect, stratified by T, alpha 0.05 each, no multiplicity correction. *Why:* v1's one-sided test could not refute despite a 5-of-5 separation (v1 REPORT, residual 2). Testing at the margin lets each hypothesis be supported or contradicted. Each verdict stands alone, and the continuation reads H1 only.
-- **D7.** H3's interval is [1.75, 2.25] around 2, tested on the mean x by exact sign flips, with at least six runs. *Why:* x = 2^(2/k) for a phase growing as sigma^k: the interval holds k in [1.71, 2.48] and excludes linear (k = 1, x = 4) and cubic (x = 1.59) phases. One grid step in sigma_1 near 0.8 moves x by about 12%, so a single run is not decisive; the post hoc v1 data gave x 1.83-2.04 (twelve runs, T >= 32).
+- **D7.** H3's interval is [1.75, 2.25] around 2 and the claim is about the median x of the runs with a visible revival, tested by exact sign tests at both ends, with at least six runs. *Why:* x = 2^(2/k) for a phase growing as sigma^k: the interval holds k in [1.71, 2.48] and excludes linear (k = 1, x = 4) and cubic (x = 1.59) phases. One grid step in sigma_1 near 0.8 moves x by about 12%, and a misread extremum (a second revival read as the first) gives x near 4: the median is robust to such runs and the sign test needs no symmetry or outlier model. Codex r1 F1 showed that a sign-flip test about the ends does not establish a claim about the mean. The post hoc v1 data gave x 1.83-2.04 (twelve runs, T >= 32).
 - **D8.** H2 and H3 use the own readout exactly as v1 evaluated it (all 4096 sequences, v1's noise seeds); H1 uses transfer.py's test states (the same inputs, noise seeded by (T, sigma) and common to all models), scored on the second half. *Why:* H2 replicates v1's measure; transfer.py's states() is the frozen honest path, and its score() fits the oracle on the first half.
 - **D9.** Control-GRU is decoded by the pooled LDA only and reported without a verdict. *Why:* The sensor needs phases; GRU noise enters in other units, so a GRU comparison says how much any re-calibrated linear decoder lifts a model without a clock, not which memory is better.
 - **D10.** The continuation rule reads H1 alone: not SUPPORTED, the line is recommended closed. *Why:* The owner's brief: one test that decides whether the line has a usable property, then a close-out.
 - **D11.** No new fringes probes; no change to phs-soliton/ or fringes/. *Why:* The brief, and lab AGENTS.md (a new experiment does not change other directories).
+- **D12.** An adequacy condition guards H1: SUPPORTED needs the honest decoder to read Pure-PHS about as well as Pure's own readout (mean honest sigma_crit >= mean native - 0.05 in every entering T). *Why:* Codex r1 F3: with both honest decoders reading nothing, both arms tie at -0.05 and the relative test alone would support H1 and continue the line. Pure has no clock, so a competent sigma-blind decoder should read it at least about as well as the readout trained on sigma <= 0.35 (in fringes it read better).
+- **D13.** A run killed before its manifest is executed again from the same seed; the attempt records and the checkpoint the killed attempt left are kept and checked. *Why:* Codex r1 F5: without a record, a restart could draw a run again unseen. Training and evaluation are deterministic from the seed (v1: bitwise identical runs under parallel load; here a simulated redo of a smoke run gave the same weights), so a redo is the same draw, and the check refuses one that is not.
 
 ## Cost
 
@@ -205,19 +208,28 @@ Parameters: `{"acc_threshold": 0.8, "alpha": 0.05, "gate_acc": 0.95, "h3": {"int
 ## Execution
 
 - From phs-clock/ at the tag: `../phs-soliton/.venv/bin/python -m unittest discover -s tests -t .`, `../phs-soliton/.venv/bin/python mutants.py`, `../phs-soliton/.venv/bin/python prereg.py check`, then `caffeinate -i ../phs-soliton/.venv/bin/python run.py run --workers 12`, then `../phs-soliton/.venv/bin/python analyze.py`.
-- run.py refuses unless the tag exists, prereg.json equals the tagged one, the pinned SHA-256 hold, every file a run reads (phs-clock/ outside results/ and REPORT.md, phs-soliton/phs/, phs-soliton/prereg.json, phs-soliton/tools/confirm.py, the three fringes files) equals the tag with nothing uncommitted, and the configurations equal phs-soliton's. Each worker checks again before it starts.
+- run.py refuses unless the tag exists, prereg.json equals the tagged one, the pinned SHA-256 hold, the whole repository outside phs-clock/results/ and phs-clock/REPORT.md equals the tag (no file changed, added, removed or untracked; ignored files such as runs/ and the venv are not sources), and the configurations equal phs-soliton's. Each worker checks again before it starts.
 - Each run writes results/manifests/A-<model>-T<T>-s<seed>.json (status OK or FAILED with its reason, never overwritten) and its validation-selected checkpoint results/checkpoints/A-<model>-T<T>-s<seed>.pt (SHA-256 in the manifest). The fitted decoders go to the ignored runs/decoders/ (readout.py refits them from the checkpoint).
-- analyze.py refuses unless its SHA-256, prereg.json and fringe_scan.py match, and every one of the sixty runs has an admissible manifest (one per run, from the tag, registered configuration, environment and test-cell digests, checkpoint hash, complete decoder rows, the play check exact).
-- A crashed run is a FAILED manifest, not a gap; a rerun is a new version of this PREREG with its reason.
+- analyze.py refuses unless its SHA-256, prereg.json and fringe_scan.py match, and every one of the sixty runs has an admissible manifest: one per run, from the tag, registered configuration and environment, its attempt records, a reason if FAILED; if OK the registered test-cell digests, the checkpoint hash, the registered decoder list with every accuracy a finite number in [0, 1], and the play check exact.
+- A crashed run is a FAILED manifest, not a gap, and is never run again under this PREREG; a run killed before its manifest is redone as in measures.attempts.
 
 ## Review
 
+- Round 1: Codex (codex-cli 0.166.0, codex exec in a detached worktree at a38b8a4, workspace-write sandbox, blind prompt reviews/prereg-v1-codex-prompt.txt) on commit a38b8a4. AMEND: 3 P1, 2 P2, 2 P3; text in reviews/prereg-v1-codex-r1.md. Codex found no test-label leakage into the honest fit, the decoder choice or the checkpoint selection, and the enumeration, margin direction and two-sided tails as stated.
+- One round only (the brief). Each finding was fixed with a test and a named mutant; the fixes were not re-reviewed and stand as named residuals R1-R7:
+- R1 (F1, P1): H3 is now a claim about the median x, by exact sign tests at both ends (D7); M07, M08.
+- R2 (F2, P1): the source guard compares the whole repository outside the output paths with the tag, committed additions and untracked files included (tests/test_run.py); M24, M25.
+- R3 (F3, P1): the adequacy condition on H1 (D12); M20.
+- R4 (F4, P2): admission requires the registered decoder list and every accuracy a finite number in [0, 1]; M21, M29.
+- R5 (F5, P2): attempt records before training, redo from the same seed with the weights checked, a SystemExit recorded as FAILED (D13); M23, M27.
+- R6 (F6, P3): the reported interval stays within [-1, 1]; M26.
+- R7 (F7, P3): a FAILED run needs a reason, kept in results.json; M22, M28.
 
 ## Frozen files (SHA-256)
 
 | file | SHA-256 |
 |---|---|
-| `phs-clock/analyze.py` | `b1416090c4bf13f3bb1082e8116f31cd39ea35fab5441f874f83215ffbdd9a0d` |
+| `phs-clock/analyze.py` | `d1dd84c2251daefe0844257179d01fca17ffe3ad98f3bf365577ed917e5c128c` |
 | `phs-clock/decode.py` | `0903337461257b9f3ffc928bc7d03a3331a6d9b60564fe0691c831bae5715f6a` |
 | `fringes/readout.py` | `d065e98428fbdc9852d0beb1547cf0b1b4f2613472e8154f67e63a874c77e314` |
 | `fringes/transfer.py` | `da01856bbb4751b7b7c0c49bb921fb6ecfb30f92e73fc2ad6bebebdfda5598c7` |

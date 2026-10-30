@@ -49,18 +49,18 @@
    ]
   },
   "M07": {
-   "claim": "the sign-flip test is two-sided",
+   "claim": "the sign test is two-sided",
    "file": "analyze.py",
-   "find": "np.count_nonzero(np.abs(signs @ y) >= c)",
-   "replace": "np.count_nonzero(signs @ y >= c)",
+   "find": "2 * sum(math.comb(n, i) for i in range(k + 1)) / 2 ** n",
+   "replace": "sum(math.comb(n, i) for i in range(k + 1)) / 2 ** n",
    "kills": [
-    "tests.test_analyze.ExactTests.test_signflip_matches_enumeration"
+    "tests.test_analyze.ExactTests.test_sign_test_is_exact_two_sided_and_drops_ties"
    ]
   },
   "M08": {
-   "claim": "H3 is SUPPORTED only with the mean inside the interval and both ends rejected",
+   "claim": "H3 is SUPPORTED only with the median significantly inside at both ends",
    "file": "analyze.py",
-   "find": "if p_lo < alpha and p_hi < alpha and lo < mean < hi:",
+   "find": "if p_lo < alpha and a_lo > b_lo and p_hi < alpha and b_hi > a_hi:",
    "replace": "if p_lo < alpha or p_hi < alpha:",
    "kills": [
     "tests.test_analyze.Verdicts.test_h3_interval"
@@ -161,6 +161,97 @@
    "file": "analyze.py",
    "find": "    problems += [f\"no manifest for run A-{k}-T{T:03d}-s{s}\" for k, T, s in missing]\n",
    "replace": "",
+   "kills": [
+    "tests.test_analyze.Admission.test_refusals"
+   ]
+  },
+  "M20": {
+   "claim": "H1 needs an adequate honest decoder (Codex r1 F3)",
+   "file": "analyze.py",
+   "find": "if h1[\"verdict\"] == \"SUPPORTED\" and not h1[\"adequacy\"][\"holds\"]:",
+   "replace": "if False:",
+   "kills": [
+    "tests.test_analyze.Compute.test_unreadable_decoder_makes_h1_inconclusive"
+   ]
+  },
+  "M21": {
+   "claim": "an accuracy is a finite number in [0, 1] (Codex r1 F4)",
+   "file": "analyze.py",
+   "find": "return isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v) and 0 <= v <= 1",
+   "replace": "return isinstance(v, (int, float))",
+   "kills": [
+    "tests.test_analyze.Admission.test_refusals"
+   ]
+  },
+  "M22": {
+   "claim": "a FAILED run needs a reason (Codex r1 F7)",
+   "file": "analyze.py",
+   "find": "if not str(m.get(\"reason\") or \"\").strip():",
+   "replace": "if False:",
+   "kills": [
+    "tests.test_analyze.Admission.test_refusals"
+   ]
+  },
+  "M23": {
+   "claim": "every attempt record of a run is its own or a listed interrupted one (Codex r1 F5)",
+   "file": "analyze.py",
+   "find": "if sorted(p.name for p in attempts.glob(f\"{stem}.*.json\")) != sorted(str(a) for a in listed):",
+   "replace": "if False:",
+   "kills": [
+    "tests.test_analyze.Admission.test_refusals"
+   ]
+  },
+  "M24": {
+   "claim": "the source guard sees tracked changes since the tag, committed additions included (Codex r1 F2)",
+   "file": "run.py",
+   "find": "changed = git(\"diff\", \"--name-status\", tag_commit, *scope)",
+   "replace": "changed = \"\"",
+   "kills": [
+    "tests.test_run.SourceGuard.test_committed_addition_is_refused",
+    "tests.test_run.SourceGuard.test_change_removal_and_untracked_are_refused"
+   ]
+  },
+  "M25": {
+   "claim": "the source guard sees untracked files",
+   "file": "run.py",
+   "find": "untracked = git(\"ls-files\", \"--others\", \"--exclude-standard\", *scope)",
+   "replace": "untracked = \"\"",
+   "kills": [
+    "tests.test_run.SourceGuard.test_change_removal_and_untracked_are_refused"
+   ]
+  },
+  "M26": {
+   "claim": "the reported interval stays in [-1, 1] (Codex r1 F6)",
+   "file": "analyze.py",
+   "find": "centre = min(bound, max(-bound, round(stratified_p(strata)[1] / step) * step))",
+   "replace": "centre = round(stratified_p(strata)[1] / step) * step",
+   "kills": [
+    "tests.test_analyze.Compute.test_interval_stays_in_its_bounds"
+   ]
+  },
+  "M27": {
+   "claim": "a redo must reproduce the weights an interrupted attempt saved (Codex r1 F5)",
+   "file": "analyze.py",
+   "find": "if m.get(\"interrupted_state_sha256\") not in (None, m.get(\"state_sha256\")):",
+   "replace": "if False:",
+   "kills": [
+    "tests.test_analyze.Admission.test_refusals"
+   ]
+  },
+  "M28": {
+   "claim": "a FAILED run keeps its reason in the results (Codex r1 F7)",
+   "file": "analyze.py",
+   "find": "return {**out, \"gate\": False, \"reason\": m.get(\"reason\")}",
+   "replace": "return {**out, \"gate\": False}",
+   "kills": [
+    "tests.test_analyze.Compute.test_failed_reason_is_kept"
+   ]
+  },
+  "M29": {
+   "claim": "a run's decoders are the registered list",
+   "file": "analyze.py",
+   "find": "if h.get(\"decoders\") != want or [r.get(\"sigma\") for r in rows] != d[\"sigma\"]",
+   "replace": "if [r.get(\"sigma\") for r in rows] != d[\"sigma\"]",
    "kills": [
     "tests.test_analyze.Admission.test_refusals"
    ]
