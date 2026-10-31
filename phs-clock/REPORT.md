@@ -10,9 +10,9 @@ The question was whether Soliton-PHS keeps its memory under noise and only rotat
 
 - Under the frozen honest decoder, Soliton's σ_crit is 0.32 below Pure's. The interval of differences the test does not reject is [−0.385, −0.25], so the difference is far past the 0.05 margin.
 - At T = 32, no Soliton run reaches the weakest Pure run: 0 of 100 pairs. Soliton's best is 0.95; Pure's weakest is 1.05.
-- Even the diagnostic oracle leaves Soliton below Pure, by 0.185 [−0.25, −0.12]. The oracle is an LDA fit on half of each test cell, so it knows σ and the test labels. Within linear decoders, then, the missing memory is not hidden in Soliton's state waiting for a better decoder. It is not there.
+- Even the diagnostic oracle leaves Soliton below Pure, by 0.185 [−0.25, −0.12]. The oracle is an LDA fit on half of each test cell, so it knows σ and the test labels. The tested linear oracle therefore does not close the gap. This is evidence about that fitted LDA, not an upper bound over all linear or nonlinear readers or on the information present in the state.
 
-The clock itself is real. H3 is SUPPORTED on fresh seeds: the revival sits at the median x = (σ₂/σ₁)² = 1.93, and every Soliton run shows it while no Pure or GRU run does. But the clock is a cost, not a usable property. It explains why Soliton's own readout fails, and the honest decoder wins back more for Soliton than for Pure (lift +0.34 against +0.21 at T = 32). Yet Pure's memory, read by the same decoder, stays clearly ahead. H2 replicates v1 under a two-sided test: Soliton's own readout is worse than Pure's by 0.41.
+The registered revival-ratio signature replicates. H3 is SUPPORTED on fresh seeds: the revival sits at the median x = (σ₂/σ₁)² = 1.93, and every Soliton run shows it while no Pure or GRU run does. This does not meet the registered H1 continuation criterion. The honest decoder wins back more for Soliton than for Pure (lift +0.34 against +0.21 at T = 32). Yet Pure's memory, read by the same decoder, stays clearly ahead. H2 replicates v1 under a two-sided test: Soliton's own readout is worse than Pure's by 0.41.
 
 ## Verdicts
 
@@ -98,20 +98,20 @@ At the verdict budget (24 000 steps), the picture is worse for Soliton, not bett
 - Both models learn more. Pure gains the most.
 - The honest gap at T = 32 is 0.36.
 - Even the oracle leaves 0.275 at T = 32.
-- The fringes reading "the memory is there, the readout is wrong" holds only in part. The readout is wrong (lift +0.34), but less memory is there.
+- The fringes reading "the memory is there, the readout is wrong" holds only in part. The trained readout leaves a gap (lift +0.34), but the tested readers still recover less than in Pure.
 
-**H3 confirms the clock law.** On fresh seeds and with the frozen revival scan, x = 1.93 sits in the interval and close to 2, which is the value for a phase ∝ σ². fringes' post hoc v1 data gave 1.83–2.04. The revival is visible in 20 of 20 Soliton runs and in 0 of 40 Pure and GRU runs.
+**H3 supports the registered revival-ratio criterion.** On fresh seeds and with the frozen revival scan, x = 1.93 sits in the interval and close to 2, which is the value for a phase ∝ σ². fringes' post hoc v1 data gave 1.83–2.04. The revival is visible in 20 of 20 Soliton runs and in 0 of 40 Pure and GRU runs.
 
 ## What this establishes and what it does not
 
 Within this design (task A, T ∈ {32, 64}, the v1 configurations and budget, ten fresh seeds per arm and T), the test establishes four things:
-1. Soliton-PHS keeps less readable memory under thermostat noise than Pure-PHS. This holds by its own readout, by the frozen σ-blind decoder and by a linear oracle that knows σ and the test labels.
-2. Noise rotates Soliton's memory with a phase ∝ σ² (H3).
-3. The rotation costs readout. A σ-blind sensor decoder wins back part of it, but not enough to reach Pure.
+1. Under the tested readers, Soliton-PHS has a lower noise threshold than Pure-PHS: its own readout, the frozen σ-blind decoder, and the fitted linear oracle that knows σ and the test labels.
+2. The median registered revival ratio is consistent with quadratic phase scaling (H3). This criterion does not uniquely identify the dynamics or a physical mode.
+3. A σ-blind sensor decoder recovers part of the gap left by the native readout, but not enough to reach Pure.
 4. Both PHS models are under-read by their own trained readouts. Pure is under-read by 0.10–0.21.
 
 It does not establish:
-- **Nonlinear decoders.** The oracle bound is linear.
+- **Other decoders or total stored information.** The diagnostic oracle is one fitted linear LDA; it is not a proven upper bound over all linear readers, and nonlinear readers were not tested.
 - **Other conditions.** Other tasks, other T, other budgets, or another lattice (m_pin, couplings).
 - **Physics or energy.** Anything about hardware, energy or the Landauer limit.
 - **Clock as a sensor.** Any use of the clock as a sensor of σ. That would be a different question with its own PREREG, and the fringes D = ⟨cos 2θ⟩ thermometer is post hoc.
