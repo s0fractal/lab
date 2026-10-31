@@ -1,0 +1,6 @@
+gate at 37ddbd5b75982b5b4f5b463b2edecd5643eb7117 2026-10-30T13:33:26Z
+Ran 21 tests in 4.812s
+
+OK
+28/28 mutants killed on an assertion by every named test
+prereg check: ok (82 test-cell digests, 6 frozen files)
